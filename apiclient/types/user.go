@@ -83,6 +83,8 @@ type User struct {
 	DeletedAt              *Time    `json:"deletedAt,omitempty"`
 	OriginalEmail          string   `json:"originalEmail,omitempty"`
 	OriginalUsername       string   `json:"originalUsername,omitempty"`
+	AuthProviderSources    []string `json:"authProviderSources,omitempty"`
+	Disabled               bool     `json:"disabled,omitempty"`
 }
 
 type UserList List[User]

@@ -138,6 +138,8 @@ func (db *DB) AutoMigrate() (err error) {
 		types.Credential{},
 		types.LocalAuthUser{},
 		types.LocalAuthSession{},
+		types.LDAPAuthSession{},
+		types.LDAPSyncPreview{},
 		types.EnforcementDecisionLog{},
 	); err != nil {
 		return fmt.Errorf("failed to auto migrate gateway types: %w", err)

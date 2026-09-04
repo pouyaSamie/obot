@@ -88,7 +88,7 @@ func (c *Client) UserCount(ctx context.Context) (int64, error) {
 
 func (c *Client) User(ctx context.Context, username string) (*types.User, error) {
 	u := new(types.User)
-	if err := c.db.WithContext(ctx).Where("hashed_username = ? AND deleted_at IS NULL", hash.String(username)).First(u).Error; err != nil {
+	if err := c.db.WithContext(ctx).Where("hashed_username = ? AND deleted_at IS NULL AND disabled_at IS NULL", hash.String(username)).First(u).Error; err != nil {
 		return nil, err
 	}
 
@@ -97,7 +97,7 @@ func (c *Client) User(ctx context.Context, username string) (*types.User, error)
 
 func (c *Client) UserByID(ctx context.Context, id string) (*types.User, error) {
 	u := new(types.User)
-	if err := c.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(u).Error; err != nil {
+	if err := c.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL AND disabled_at IS NULL", id).First(u).Error; err != nil {
 		return nil, err
 	}
 
@@ -122,7 +122,7 @@ func (c *Client) UserFromProviderUserID(ctx context.Context, providerNamespace, 
 		if err := tx.Where("auth_provider_namespace = ? AND auth_provider_name = ? AND hashed_provider_user_id = ?", providerNamespace, providerName, hash.String(providerUserID)).First(id).Error; err != nil {
 			return err
 		}
-		return tx.Where("id = ? AND deleted_at IS NULL", id.UserID).First(u).Error
+		return tx.Where("id = ? AND deleted_at IS NULL AND disabled_at IS NULL", id.UserID).First(u).Error
 	}); err != nil {
 		return nil, err
 	}
@@ -399,6 +399,10 @@ func (c *Client) UpdateProfileIfNeeded(ctx context.Context, user *types.User, au
 		}
 	case system.LocalAuthProvider:
 		// Local users have no profile beyond their email address, and no picture.
+		if displayName, ok := profile["name"].(string); ok {
+			user.DisplayName = displayName
+		}
+	case system.LDAPAuthProvider:
 		if displayName, ok := profile["name"].(string); ok {
 			user.DisplayName = displayName
 		}
@@ -683,7 +687,7 @@ func (c *Client) getUserAndGroupIDs(ctx context.Context, userID any, authProvide
 
 	if err := c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Get the user
-		if err := tx.Where("id = ? AND deleted_at IS NULL", userID).First(u).Error; err != nil {
+		if err := tx.Where("id = ? AND deleted_at IS NULL AND disabled_at IS NULL", userID).First(u).Error; err != nil {
 			return err
 		}
 

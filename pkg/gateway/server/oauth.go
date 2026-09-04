@@ -27,12 +27,12 @@ func (s *Server) oauth(apiContext api.Context) error {
 	}
 
 	// Check to make sure this auth provider exists.
-	configuredProvider, err := s.dispatcher.GetConfiguredAuthProvider(apiContext.Context())
+	configured, err := s.dispatcher.IsAuthProviderConfigured(apiContext.Context(), namespace, name)
 	if err != nil {
 		return types2.NewErrHTTP(http.StatusInternalServerError, fmt.Sprintf("failed to get configured auth provider: %v", err))
 	}
-	if configuredProvider != "" && configuredProvider != name {
-		slog.Info("Rejected OAuth start for unconfigured auth provider", "requestedProvider", name, "configuredProvider", configuredProvider, "tokenRequestID", apiContext.PathValue("id"))
+	if !configured {
+		slog.Info("Rejected OAuth start for unconfigured auth provider", "requestedProvider", name, "tokenRequestID", apiContext.PathValue("id"))
 		return types2.NewErrHTTP(http.StatusNotFound, "auth provider not found")
 	}
 
@@ -71,12 +71,12 @@ func (s *Server) redirect(apiContext api.Context) error {
 	}
 
 	// Check to make sure this auth provider exists.
-	configuredProvider, err := s.dispatcher.GetConfiguredAuthProvider(apiContext.Context())
+	configured, err := s.dispatcher.IsAuthProviderConfigured(apiContext.Context(), namespace, name)
 	if err != nil {
 		return types2.NewErrHTTP(http.StatusInternalServerError, fmt.Sprintf("failed to get configured auth provider: %v", err))
 	}
-	if configuredProvider != "" && configuredProvider != name {
-		slog.Info("Rejected OAuth redirect for unconfigured auth provider", "requestedProvider", name, "configuredProvider", configuredProvider)
+	if !configured {
+		slog.Info("Rejected OAuth redirect for unconfigured auth provider", "requestedProvider", name)
 		return types2.NewErrHTTP(http.StatusNotFound, "auth provider not found")
 	}
 

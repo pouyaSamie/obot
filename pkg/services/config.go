@@ -1098,7 +1098,7 @@ func New(ctx context.Context, config Config) (*Services, error) {
 				return ldapauth.Config{}, fmt.Errorf("load LDAP configuration: %w", err)
 			}
 			return ldapauth.ConfigFromValues(credential.Secrets), nil
-		})
+		}, gatewayClient)
 		if err != nil {
 			return nil, err
 		}

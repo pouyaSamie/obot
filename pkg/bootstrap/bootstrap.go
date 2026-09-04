@@ -31,7 +31,7 @@ type Bootstrap struct {
 }
 
 type configuredAuthProviderGetter interface {
-	GetConfiguredAuthProvider(context.Context) (string, error)
+	ListConfiguredAuthProviders(context.Context) ([]string, error)
 }
 
 func New(ctx context.Context, serverURL string, c *client.Client, authProviderGetter configuredAuthProviderGetter, authEnabled, forceEnableBootstrap bool) (*Bootstrap, error) {
@@ -288,11 +288,11 @@ func (b *Bootstrap) setupEnabled(ctx context.Context) (bool, error) {
 		return false, errors.New("configured auth provider getter is not set")
 	}
 
-	configuredAuthProvider, err := b.authProviderGetter.GetConfiguredAuthProvider(ctx)
+	configuredAuthProviders, err := b.authProviderGetter.ListConfiguredAuthProviders(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get configured auth provider: %w", err)
 	}
-	if configuredAuthProvider == "" {
+	if len(configuredAuthProviders) == 0 {
 		return true, nil
 	}
 
@@ -308,12 +308,14 @@ func (b *Bootstrap) setupEnabled(ctx context.Context) (bool, error) {
 			continue
 		}
 
-		hasIdentity, err := b.gatewayClient.UserHasIdentityForAuthProvider(ctx, u.ID, configuredAuthProvider)
-		if err != nil {
-			return false, fmt.Errorf("failed to check owner auth provider identity: %w", err)
-		}
-		if hasIdentity {
-			return false, nil
+		for _, configuredAuthProvider := range configuredAuthProviders {
+			hasIdentity, err := b.gatewayClient.UserHasIdentityForAuthProvider(ctx, u.ID, configuredAuthProvider)
+			if err != nil {
+				return false, fmt.Errorf("failed to check owner auth provider identity: %w", err)
+			}
+			if hasIdentity {
+				return false, nil
+			}
 		}
 	}
 

@@ -44,6 +44,14 @@ func (c *Client) deleteSessionsForUser(ctx context.Context, db *gorm.DB, storage
 			}
 			continue
 		}
+		if identity.AuthProviderName == system.LDAPAuthProvider && identity.AuthProviderNamespace == system.DefaultNamespace {
+			if err := c.DeleteLDAPAuthSessionsForIdentity(ctx, identity.AuthProviderNamespace, identity.AuthProviderName, identity.ProviderUserID); err != nil {
+				errs = append(errs, fmt.Errorf("failed to delete LDAP auth sessions: %w", err))
+			} else {
+				logger.Info("deleted sessions", "provider", identity.AuthProviderName, "emailHash", hash.String(identity.Email))
+			}
+			continue
+		}
 
 		external = append(external, identity)
 	}

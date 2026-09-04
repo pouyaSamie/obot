@@ -24,6 +24,7 @@ import (
 
 const (
 	CurrentAuthProviderCookie  = "current_auth_provider"
+	SessionAuthProviderCookie  = "obot_auth_provider"
 	ObotAccessTokenCookie      = "obot_access_token"
 	ObotAuthProviderQueryParam = "obot-auth-provider"
 )
@@ -73,16 +74,39 @@ func (pm *Manager) AuthenticateRequest(req *http.Request) (*authenticator.Respon
 		return nil, false, nil
 	}
 
-	configuredProvider, err := pm.dispatcher.GetConfiguredAuthProvider(req.Context())
+	providerName := ""
+	if cookie, err := req.Cookie(SessionAuthProviderCookie); err == nil {
+		namespace, name, ok := strings.Cut(cookie.Value, "/")
+		if ok && namespace == system.DefaultNamespace {
+			providerName = name
+		}
+	}
+	configuredProviders, err := pm.dispatcher.ListConfiguredAuthProviders(req.Context())
 	if err != nil {
 		return nil, false, err
-	} else if configuredProvider == "" {
+	} else if len(configuredProviders) == 0 {
 		// No provider is configured, but the user has a session cookie.
 		// Probably the old provider was deconfigured.
 		return nil, false, ErrInvalidSession
 	}
+	if providerName == "" {
+		// Sessions created before provider routing was introduced remain usable
+		// while exactly one provider is configured. With multiple providers the
+		// cookie is intentionally insufficient to identify a safe validator.
+		if len(configuredProviders) != 1 {
+			return nil, false, ErrInvalidSession
+		}
+		providerName = configuredProviders[0]
+	}
+	configured, err := pm.dispatcher.IsAuthProviderConfigured(req.Context(), system.DefaultNamespace, providerName)
+	if err != nil || !configured {
+		if err != nil {
+			return nil, false, err
+		}
+		return nil, false, ErrInvalidSession
+	}
 
-	proxy, err := pm.createProxy(req.Context(), system.DefaultNamespace+"/"+configuredProvider)
+	proxy, err := pm.createProxy(req.Context(), system.DefaultNamespace+"/"+providerName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -133,6 +157,8 @@ func (pm *Manager) ServeHTTP(user user.Info, w http.ResponseWriter, r *http.Requ
 	} else if param := r.URL.Query().Get(ObotAuthProviderQueryParam); param != "" {
 		// If the provider is set in the query params, use that.
 		provider = param
+	} else if cookie, err := r.Cookie(SessionAuthProviderCookie); err == nil {
+		provider = cookie.Value
 	}
 
 	// Save the redirect target for later.
@@ -141,14 +167,14 @@ func (pm *Manager) ServeHTTP(user user.Info, w http.ResponseWriter, r *http.Requ
 		rdParam = "/"
 	}
 
-	// If no provider is set, just use the alphabetically first provider.
+	// Preserve legacy links only when exactly one provider is configured.
 	if provider == "" {
-		configuredProvider, err := pm.dispatcher.GetConfiguredAuthProvider(r.Context())
+		configuredProviders, err := pm.dispatcher.ListConfiguredAuthProviders(r.Context())
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to get configured auth provider: %v", err), http.StatusInternalServerError)
 			return
 		}
-		if configuredProvider == "" {
+		if len(configuredProviders) == 0 {
 			// There aren't any auth providers configured. Return an error, unless the user is signing out, in which case, just redirect.
 			if r.URL.Path == "/oauth2/sign_out" {
 				http.Redirect(w, r, rdParam, http.StatusFound)
@@ -158,8 +184,11 @@ func (pm *Manager) ServeHTTP(user user.Info, w http.ResponseWriter, r *http.Requ
 			http.Error(w, "no auth providers configured", http.StatusBadRequest)
 			return
 		}
-
-		provider = system.DefaultNamespace + "/" + configuredProvider
+		if len(configuredProviders) != 1 {
+			http.Error(w, "select an authentication provider", http.StatusBadRequest)
+			return
+		}
+		provider = system.DefaultNamespace + "/" + configuredProviders[0]
 	} else {
 		namespace, name, _ := strings.Cut(provider, "/")
 		if namespace == "" || name == "" {
@@ -168,12 +197,12 @@ func (pm *Manager) ServeHTTP(user user.Info, w http.ResponseWriter, r *http.Requ
 		}
 
 		// Check if the provider is configured.
-		configuredProvider, err := pm.dispatcher.GetConfiguredAuthProvider(r.Context())
+		configured, err := pm.dispatcher.IsAuthProviderConfigured(r.Context(), namespace, name)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to get configured auth provider: %v", err), http.StatusInternalServerError)
 			return
 		}
-		if configuredProvider != "" && configuredProvider != name {
+		if !configured {
 			http.Error(w, "auth provider not configured: "+provider, http.StatusBadRequest)
 			return
 		}
@@ -200,6 +229,18 @@ func (pm *Manager) ServeHTTP(user user.Info, w http.ResponseWriter, r *http.Requ
 			Path:   "/oauth2/callback",
 			MaxAge: 60 * 15, // 15 minutes should be plenty of time to do oauth
 		})
+		http.SetCookie(w, &http.Cookie{
+			Name:     SessionAuthProviderCookie,
+			Value:    provider,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   r.TLS != nil,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   60 * 60 * 24 * 7,
+		})
+	}
+	if r.URL.Path == "/oauth2/sign_out" {
+		http.SetCookie(w, &http.Cookie{Name: SessionAuthProviderCookie, Value: "", Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode, MaxAge: -1})
 	}
 
 	slog.Info("forwarding request to provider", "path", r.URL.Path, "provider", provider)

@@ -13,6 +13,7 @@ import (
 	"github.com/obot-platform/obot/pkg/gateway/server/dispatcher"
 	gatewaytypes "github.com/obot-platform/obot/pkg/gateway/types"
 	"github.com/obot-platform/obot/pkg/license"
+	"github.com/obot-platform/obot/pkg/ldapauth"
 	"github.com/obot-platform/obot/pkg/localauth"
 	v1 "github.com/obot-platform/obot/pkg/storage/apis/obot.obot.ai/v1"
 	"github.com/obot-platform/obot/pkg/system"
@@ -35,14 +36,6 @@ type Handler struct {
 	dispatcher      *dispatcher.Dispatcher
 	licenseProvider *license.Provider
 	postgresDSN     string
-}
-
-type authProviderConflictError struct {
-	configuredProvider string
-}
-
-func (e *authProviderConflictError) Error() string {
-	return fmt.Sprintf("only one authentication provider can be configured at a time. Please deconfigure %q first", e.configuredProvider)
 }
 
 func New(gatewayClient *gateway.Client, dispatcher *dispatcher.Dispatcher, licenseProvider *license.Provider, postgresDSN string) *Handler {
@@ -84,10 +77,6 @@ func (h *Handler) Reconcile(req router.Request, _ router.Response) error {
 	switch change.Spec.ProviderType {
 	case v1.ProviderTypeAuth:
 		if err := h.reconcileAuthProvider(req.Ctx, req.Client, change, stagedSecrets); err != nil {
-			if conflictErr, ok := errors.AsType[*authProviderConflictError](err); ok {
-				change.Status.Error = conflictErr.Error()
-				return nil
-			}
 			return err
 		}
 	case v1.ProviderTypeModel:
@@ -144,13 +133,6 @@ func (h *Handler) reconcileAuthProvider(ctx context.Context, client kclient.Clie
 	}
 
 	if change.Spec.DesiredState == v1.ProviderDesiredStateConfigured {
-		configuredProvider, err := h.dispatcher.GetConfiguredAuthProvider(ctx)
-		if err != nil {
-			return fmt.Errorf("get configured auth provider: %w", err)
-		}
-		if configuredProvider != "" && configuredProvider != authProvider.Name {
-			return &authProviderConflictError{configuredProvider: configuredProvider}
-		}
 		if err := h.gatewayClient.UpsertCredential(ctx, gatewaytypes.Credential{
 			Context: authProvider.Name,
 			Name:    authProvider.Name,
@@ -190,6 +172,11 @@ func (h *Handler) deconfigureAuthProvider(ctx context.Context, client kclient.Cl
 	if authProvider.Name == localauth.ProviderName {
 		if err := h.gatewayClient.DeleteAllLocalAuthSessions(ctx); err != nil {
 			return fmt.Errorf("delete local auth sessions: %w", err)
+		}
+	}
+	if authProvider.Name == ldapauth.ProviderName {
+		if err := h.gatewayClient.DeleteAllLDAPAuthSessions(ctx); err != nil {
+			return fmt.Errorf("delete LDAP auth sessions: %w", err)
 		}
 	}
 	if err := dropAuthProviderSessionTables(authProvider, h.postgresDSN); err != nil {

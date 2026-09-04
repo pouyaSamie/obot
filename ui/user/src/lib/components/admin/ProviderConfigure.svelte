@@ -27,6 +27,7 @@
 	let dialog = $state<ReturnType<typeof ResponsiveDialog>>();
 	let form = $state<Record<string, string>>({});
 	let showRequired = $state(false);
+	let validationErrors = $state<Record<string, string>>({});
 
 	const isAzureOpenAIProvider = $derived(provider && provider.id === 'azure-openai-model-provider');
 
@@ -150,6 +151,7 @@
 		// Reset state on each open
 		form = {};
 		showRequired = false;
+		validationErrors = {};
 
 		if (provider) {
 			for (const param of provider.requiredConfigurationParameters ?? []) {
@@ -164,10 +166,12 @@
 	function onClose() {
 		form = {};
 		showRequired = false;
+		validationErrors = {};
 	}
 
 	function reset() {
 		showRequired = false;
+		validationErrors = {};
 		form = {};
 
 		if (isAzureOpenAIProvider) {
@@ -201,6 +205,7 @@
 
 	async function configure() {
 		showRequired = false;
+		validationErrors = {};
 
 		const requiredFieldsNotFilled = requiredConfigurationParameters.filter(
 			(p) => !form[p.name].length
@@ -209,6 +214,35 @@
 		if (requiredFieldsNotFilled.length > 0) {
 			showRequired = true;
 			return;
+		}
+
+		if (provider?.id === 'ldap-auth-provider') {
+			const ldapErrors: Record<string, string> = {};
+			const ldapURL = form.OBOT_LDAP_URL?.trim();
+			if (ldapURL) {
+				try {
+					const url = new URL(ldapURL);
+					if (url.protocol !== 'ldap:' && url.protocol !== 'ldaps:') {
+						ldapErrors.OBOT_LDAP_URL = 'Use an ldap:// or ldaps:// URL.';
+					}
+					if (form.OBOT_LDAP_START_TLS === 'true' && url.protocol !== 'ldap:') {
+						ldapErrors.OBOT_LDAP_START_TLS = 'StartTLS requires an ldap:// URL.';
+					}
+				} catch {
+					ldapErrors.OBOT_LDAP_URL = 'Use a complete ldap:// or ldaps:// URL.';
+				}
+			}
+
+			const loginFilter = form.OBOT_LDAP_USER_FILTER?.trim();
+			if (loginFilter && !loginFilter.includes('{username}')) {
+				ldapErrors.OBOT_LDAP_USER_FILTER =
+					'Login Filter must contain {username}. Use the User Sync Filter for an AD user-object filter.';
+			}
+
+			if (Object.keys(ldapErrors).length > 0) {
+				validationErrors = ldapErrors;
+				return;
+			}
 		}
 
 		const allParams = [...requiredConfigurationParameters, ...optionalConfigurationParameters];
@@ -301,14 +335,17 @@
 				class="hidden"
 				disabled={readonly}
 			/>
-			{#if error}
-				<div class="notification-error flex min-w-0 items-start gap-2 overflow-hidden">
+			{#if error || Object.keys(validationErrors).length > 0}
+				<div
+					class="notification-error flex w-full max-w-none items-start gap-2 overflow-visible"
+					role="alert"
+				>
 					<CircleAlert class="mt-0.5 size-6 shrink-0 text-error" />
-					<p class="min-w-0 flex flex-col text-sm font-light">
+					<p class="min-w-0 flex-1 text-sm font-light">
 						<span class="font-semibold">An error occurred!</span>
-						<span class="max-h-28 overflow-auto wrap-break-word pr-1">
+						<span class="mt-1 block max-h-48 overflow-y-auto whitespace-pre-wrap break-words pr-1 [overflow-wrap:anywhere]">
 							Your configuration could not be saved because it failed validation: <b
-								class="break-all font-semibold">{error}</b
+								class="font-semibold">{error ?? Object.values(validationErrors).join(' ')}</b
 							>
 						</span>
 					</p>
@@ -351,12 +388,14 @@
 					<ul class="flex flex-col gap-4">
 						{#each requiredConfigurationParameters as parameter (parameter.name)}
 							{#if parameter.name in form}
-								{@const error = !form[parameter.name].length && showRequired}
+								{@const fieldError =
+									validationErrors[parameter.name] ??
+									(!form[parameter.name].length && showRequired ? 'This field is required.' : undefined)}
 								{#if booleanInputs.has(parameter.name)}
 									{@render booleanToggle(parameter)}
 								{:else}
 									<li class="flex flex-col gap-1">
-										<label for={parameter.name} class:text-error={error}
+										<label for={parameter.name} class:text-error={!!fieldError}
 											>{parameter.friendlyName}</label
 										>
 										{#if parameter.description}
@@ -364,7 +403,7 @@
 										{/if}
 										{#if parameter.sensitive}
 											<SensitiveInput
-												{error}
+												error={!!fieldError}
 												name={parameter.name}
 												bind:value={form[parameter.name]}
 												disabled={readonly}
@@ -378,7 +417,7 @@
 												labels={parameter.name === 'OBOT_AUTH_PROVIDER_EMAIL_DOMAINS'
 													? { '*': 'All domains' }
 													: {}}
-												class={['text-input-filled', error && 'error'].filter(Boolean).join(' ')}
+												class={['text-input-filled', fieldError && 'error'].filter(Boolean).join(' ')}
 												placeholder={`Hit "Enter" to insert`.toString()}
 												disabled={readonly}
 											/>
@@ -386,7 +425,7 @@
 											<textarea
 												id={parameter.name}
 												bind:value={form[parameter.name]}
-												class:error
+												class:error={!!fieldError}
 												class="text-input-filled min-h-[120px] resize-y"
 												disabled={readonly}
 												rows="5"
@@ -396,10 +435,13 @@
 												type="text"
 												id={parameter.name}
 												bind:value={form[parameter.name]}
-												class:error
+												class:error={!!fieldError}
 												class="text-input-filled"
 												disabled={readonly}
 											/>
+										{/if}
+										{#if fieldError}
+											<span class="text-error text-xs" role="alert">{fieldError}</span>
 										{/if}
 									</li>
 								{/if}
@@ -418,13 +460,15 @@
 								{#if booleanInputs.has(parameter.name)}
 									{@render booleanToggle(parameter)}
 								{:else}
+									{@const fieldError = validationErrors[parameter.name]}
 									<li class="flex flex-col gap-1">
-										<label for={parameter.name}>{parameter.friendlyName}</label>
+										<label for={parameter.name} class:text-error={!!fieldError}>{parameter.friendlyName}</label>
 										{#if parameter.description}
 											<span class="text-gray text-xs">{parameter.description}</span>
 										{/if}
 										{#if parameter.sensitive}
 											<SensitiveInput
+												error={!!fieldError}
 												name={parameter.name}
 												bind:value={form[parameter.name]}
 												disabled={readonly}
@@ -435,7 +479,7 @@
 											<MultiValueInput
 												bind:value={form[parameter.name]}
 												id={parameter.name}
-												class="text-input-filled"
+												class={['text-input-filled', fieldError && 'error'].filter(Boolean).join(' ')}
 												placeholder={`Hit "Enter" to insert`.toString()}
 												disabled={readonly}
 											/>
@@ -443,7 +487,7 @@
 											<textarea
 												id={parameter.name}
 												bind:value={form[parameter.name]}
-												class="text-input-filled min-h-[120px] resize-y"
+												class={['text-input-filled min-h-[120px] resize-y', fieldError && 'error'].filter(Boolean).join(' ')}
 												disabled={readonly}
 												rows="5"
 											></textarea>
@@ -452,9 +496,12 @@
 												type="text"
 												id={parameter.name}
 												bind:value={form[parameter.name]}
-												class="text-input-filled"
+												class={['text-input-filled', fieldError && 'error'].filter(Boolean).join(' ')}
 												disabled={readonly}
 											/>
+										{/if}
+										{#if fieldError}
+											<span class="text-error text-xs" role="alert">{fieldError}</span>
 										{/if}
 									</li>
 								{/if}

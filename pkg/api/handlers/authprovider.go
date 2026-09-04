@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/obot-platform/obot/apiclient/types"
 	"github.com/obot-platform/obot/pkg/api"
@@ -13,6 +14,7 @@ import (
 	gateway "github.com/obot-platform/obot/pkg/gateway/client"
 	"github.com/obot-platform/obot/pkg/gateway/server/dispatcher"
 	"github.com/obot-platform/obot/pkg/license"
+	"github.com/obot-platform/obot/pkg/ldapauth"
 	v1 "github.com/obot-platform/obot/pkg/storage/apis/obot.obot.ai/v1"
 	"github.com/obot-platform/obot/pkg/system"
 	kclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,14 +28,108 @@ type AuthProviderHandler struct {
 	dispatcher  *dispatcher.Dispatcher
 	postgresDSN string
 	license     *license.Provider
+	ldap        *ldapauth.Provider
 }
 
-func NewAuthProviderHandler(dispatcher *dispatcher.Dispatcher, postgresDSN string, licenseProvider *license.Provider) *AuthProviderHandler {
+func NewAuthProviderHandler(dispatcher *dispatcher.Dispatcher, postgresDSN string, licenseProvider *license.Provider, ldapProvider ...*ldapauth.Provider) *AuthProviderHandler {
+	var ldap *ldapauth.Provider
+	if len(ldapProvider) > 0 {
+		ldap = ldapProvider[0]
+	}
 	return &AuthProviderHandler{
 		dispatcher:  dispatcher,
 		postgresDSN: postgresDSN,
 		license:     licenseProvider,
+		ldap:        ldap,
 	}
+}
+
+type ldapSyncRequest struct {
+	PreviewToken string `json:"previewToken"`
+}
+
+// LDAPSyncPreview lists the LDAP directory without changing Obot users.
+func (ap *AuthProviderHandler) LDAPSyncPreview(req api.Context) error {
+	entries, err := ap.ldapSyncEntries(req)
+	if err != nil {
+		return err
+	}
+	summary, err := req.GatewayClient.PreviewLDAPSync(req.Context(), system.DefaultNamespace, ldapauth.ProviderName, entries)
+	if err != nil {
+		return err
+	}
+	token, err := generateCookieSecret()
+	if err != nil {
+		return err
+	}
+	revision, err := ap.ldap.ConfigurationRevision(req.Context())
+	if err != nil {
+		return err
+	}
+	if err := req.GatewayClient.CreateLDAPSyncPreview(req.Context(), token, system.DefaultNamespace, ldapauth.ProviderName, revision, summary.SnapshotHash); err != nil {
+		return err
+	}
+	summary.PreviewToken = token
+	return req.Write(summary)
+}
+
+// LDAPSyncApply repeats the directory read and refuses to apply when it differs
+// from the administrator-reviewed preview.
+func (ap *AuthProviderHandler) LDAPSyncApply(req api.Context) error {
+	var body ldapSyncRequest
+	if err := req.Read(&body); err != nil {
+		return types.NewErrBadRequest("invalid LDAP sync request: %v", err)
+	}
+	entries, err := ap.ldapSyncEntries(req)
+	if err != nil {
+		return err
+	}
+	preview, err := req.GatewayClient.PreviewLDAPSync(req.Context(), system.DefaultNamespace, ldapauth.ProviderName, entries)
+	if err != nil {
+		return err
+	}
+	if preview.Conflicts > 0 {
+		return types.NewErrHTTP(http.StatusConflict, "LDAP synchronization has conflicts; resolve them and run preview again")
+	}
+	revision, err := ap.ldap.ConfigurationRevision(req.Context())
+	if err != nil {
+		return err
+	}
+	valid, err := req.GatewayClient.LDAPSyncPreviewValid(req.Context(), body.PreviewToken, system.DefaultNamespace, ldapauth.ProviderName, revision, preview.SnapshotHash)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return types.NewErrHTTP(http.StatusConflict, "LDAP directory changed since preview; run preview again")
+	}
+	summary, err := req.GatewayClient.ApplyLDAPSync(req.Context(), system.DefaultNamespace, ldapauth.ProviderName, entries)
+	if err != nil {
+		return err
+	}
+	_ = req.GatewayClient.DeleteLDAPSyncPreview(req.Context(), body.PreviewToken)
+	return req.Write(summary)
+}
+
+func (ap *AuthProviderHandler) ldapSyncEntries(req api.Context) ([]gateway.LDAPSyncUser, error) {
+	if req.PathValue("id") != ldapauth.ProviderName || ap.ldap == nil {
+		return nil, types.NewErrNotFound("LDAP synchronization is not available")
+	}
+	configured, err := ap.dispatcher.IsAuthProviderConfigured(req.Context(), system.DefaultNamespace, ldapauth.ProviderName)
+	if err != nil {
+		return nil, err
+	}
+	if !configured {
+		return nil, types.NewErrBadRequest("LDAP must be configured before users can be synchronized")
+	}
+	directoryUsers, err := ap.ldap.ListDirectoryUsers(req.Context())
+	if err != nil {
+		return nil, fmt.Errorf("list LDAP users: %w", err)
+	}
+	entries := make([]gateway.LDAPSyncUser, 0, len(directoryUsers))
+	for _, user := range directoryUsers {
+		entries = append(entries, gateway.LDAPSyncUser{ID: user.ID, Username: user.Username, Email: user.Email, DisplayName: user.Name, Groups: user.Groups})
+	}
+	return entries, nil
 }
 
 func (ap *AuthProviderHandler) ByID(req api.Context) error {
@@ -85,16 +181,6 @@ func (ap *AuthProviderHandler) Configure(req api.Context) error {
 		return err
 	}
 
-	configuredProvider, err := ap.dispatcher.GetConfiguredAuthProvider(req.Context())
-	if err != nil {
-		return fmt.Errorf("failed to get configured auth provider: %w", err)
-	}
-	if configuredProvider != "" && configuredProvider != authProvider.Name {
-		return types.NewErrBadRequest(
-			"only one authentication provider can be configured at a time. Please deconfigure %q first",
-			configuredProvider,
-		)
-	}
 	var envVars map[string]string
 	if err := req.Read(&envVars); err != nil {
 		return err
@@ -102,14 +188,24 @@ func (ap *AuthProviderHandler) Configure(req api.Context) error {
 		envVars = make(map[string]string, 1)
 	}
 
-	envVars[CookieSecretEnvVar], err = generateCookieSecret()
+	cookieSecret, err := generateCookieSecret()
 	if err != nil {
 		return err
 	}
+	envVars[CookieSecretEnvVar] = cookieSecret
 
 	for key, val := range envVars {
 		if val == "" {
 			delete(envVars, key)
+		}
+	}
+
+	if authProvider.Name == ldapauth.ProviderName {
+		if ap.ldap == nil {
+			return types.NewErrBadRequest("LDAP authentication is not enabled")
+		}
+		if err := ap.ldap.ValidateConfig(req.Context(), ldapauth.ConfigFromValues(envVars)); err != nil {
+			return types.NewErrBadRequest("invalid LDAP configuration: %v", err)
 		}
 	}
 
@@ -179,6 +275,7 @@ func (ap *AuthProviderHandler) Reveal(req api.Context) error {
 }
 
 func (ap *AuthProviderHandler) convertAuthProvider(authProvider v1.AuthProvider, authProviderStatus types.AuthProviderStatus) types.AuthProvider {
+	authProviderStatus.SupportsUserSync = authProvider.Name == ldapauth.ProviderName
 	return types.AuthProvider{
 		Metadata:             MetadataFrom(&authProvider),
 		AuthProviderManifest: authProvider.Spec.AuthProviderManifest,

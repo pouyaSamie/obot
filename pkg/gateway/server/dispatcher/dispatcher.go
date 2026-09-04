@@ -203,35 +203,66 @@ func (d *Dispatcher) stopProvider(providerType, namespace, providerName string) 
 	d.stopDaemon(providerKey(providerType, namespace, providerName))
 }
 
-func (d *Dispatcher) GetConfiguredAuthProvider(ctx context.Context) (string, error) {
+// ListConfiguredAuthProviders returns every configured authentication provider. Older
+// installations only had one provider, but built-in LDAP deliberately coexists with local
+// authentication so callers must not silently select an arbitrary provider.
+func (d *Dispatcher) ListConfiguredAuthProviders(ctx context.Context) ([]string, error) {
 	var authProviders v1.AuthProviderList
 	// First check for an auth provider whose status field is configured.
 	if err := d.client.List(ctx, &authProviders, &kclient.ListOptions{
 		Namespace:     system.DefaultNamespace,
 		FieldSelector: fields.SelectorFromSet(map[string]string{"status.configured": "true"}),
 	}); err != nil {
-		return "", fmt.Errorf("failed to list auth providers: %w", err)
+		return nil, fmt.Errorf("failed to list auth providers: %w", err)
 	}
 
+	configured := make([]string, 0, len(authProviders.Items))
 	for _, authProvider := range authProviders.Items {
 		if d.isAuthProviderConfigured(ctx, authProvider) {
-			return authProvider.Name, nil
+			configured = append(configured, authProvider.Name)
 		}
+	}
+	if len(configured) > 0 {
+		return configured, nil
 	}
 
 	// If no auth provider is configured, then check all of them in case the controller hasn't updated yet.
 	if err := d.client.List(ctx, &authProviders, &kclient.ListOptions{
 		Namespace: system.DefaultNamespace,
 	}); err != nil {
-		return "", fmt.Errorf("failed to list auth providers: %w", err)
+		return nil, fmt.Errorf("failed to list auth providers: %w", err)
 	}
 
 	for _, authProvider := range authProviders.Items {
 		if d.isAuthProviderConfigured(ctx, authProvider) {
-			return authProvider.Name, nil
+			configured = append(configured, authProvider.Name)
 		}
 	}
 
+	return configured, nil
+}
+
+// IsAuthProviderConfigured reports whether the named provider is configured without
+// imposing the former one-provider-only policy.
+func (d *Dispatcher) IsAuthProviderConfigured(ctx context.Context, namespace, name string) (bool, error) {
+	var authProvider v1.AuthProvider
+	if err := d.client.Get(ctx, kclient.ObjectKey{Namespace: namespace, Name: name}, &authProvider); err != nil {
+		return false, fmt.Errorf("failed to get auth provider: %w", err)
+	}
+	return d.isAuthProviderConfigured(ctx, authProvider), nil
+}
+
+// GetConfiguredAuthProvider remains for legacy callers that can only operate with one
+// provider. New authentication paths must use ListConfiguredAuthProviders or
+// IsAuthProviderConfigured.
+func (d *Dispatcher) GetConfiguredAuthProvider(ctx context.Context) (string, error) {
+	configured, err := d.ListConfiguredAuthProviders(ctx)
+	if err != nil {
+		return "", err
+	}
+	if len(configured) == 1 {
+		return configured[0], nil
+	}
 	return "", nil
 }
 

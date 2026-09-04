@@ -795,6 +795,7 @@ export interface DefaultModelAlias {
 // Organization
 
 export interface OrgUser {
+	authProviderSources?: string[];
 	created: string;
 	username: string;
 	email: string;
@@ -810,6 +811,7 @@ export interface OrgUser {
 	originalEmail?: string;
 	originalUsername?: string;
 	dailyTotalTokensLimit?: number;
+	disabled?: boolean;
 }
 export interface OrgGroup {
 	id: string;

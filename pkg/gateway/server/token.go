@@ -78,12 +78,12 @@ func (s *Server) tokenRequest(apiContext api.Context) error {
 	if reqObj.ProviderName == "" || reqObj.ProviderNamespace == "" {
 		return types2.NewErrHTTP(http.StatusBadRequest, "provider name and namespace are required")
 	}
-	configuredProvider, err := s.dispatcher.GetConfiguredAuthProvider(apiContext.Context())
+	configured, err := s.dispatcher.IsAuthProviderConfigured(apiContext.Context(), reqObj.ProviderNamespace, reqObj.ProviderName)
 	if err != nil {
 		return types2.NewErrHTTP(http.StatusInternalServerError, fmt.Sprintf("failed to get configured auth provider: %v", err))
 	}
-	if configuredProvider != reqObj.ProviderName {
-		slog.Info("Rejected token request due to unconfigured auth provider", "requestedProvider", reqObj.ProviderName, "configuredProvider", configuredProvider)
+	if !configured {
+		slog.Info("Rejected token request due to unconfigured auth provider", "requestedProvider", reqObj.ProviderName)
 		return types2.NewErrHTTP(http.StatusBadRequest, fmt.Sprintf("auth provider %q not found", reqObj.ProviderName))
 	}
 
@@ -133,12 +133,12 @@ func (s *Server) redirectForTokenRequest(apiContext api.Context) error {
 	name := apiContext.PathValue("name")
 
 	if namespace != "" && name != "" {
-		configuredProvider, err := s.dispatcher.GetConfiguredAuthProvider(apiContext.Context())
+		configured, err := s.dispatcher.IsAuthProviderConfigured(apiContext.Context(), namespace, name)
 		if err != nil {
 			return types2.NewErrHTTP(http.StatusInternalServerError, fmt.Sprintf("failed to get configured auth provider: %v", err))
 		}
-		if configuredProvider != name {
-			slog.Info("Rejected redirect-for-token request due to unconfigured auth provider", "requestedProvider", name, "configuredProvider", configuredProvider, "tokenRequestID", id)
+		if !configured {
+			slog.Info("Rejected redirect-for-token request due to unconfigured auth provider", "requestedProvider", name, "tokenRequestID", id)
 			return types2.NewErrHTTP(http.StatusBadRequest, fmt.Sprintf("auth provider %q not found", name))
 		}
 	}

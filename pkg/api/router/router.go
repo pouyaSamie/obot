@@ -107,7 +107,7 @@ func NewRouter(ctx context.Context, services *services.Services) (*Router, error
 	mdmAssets := handlers.NewMDMAssetHandler()
 	mdmConfigurations := handlers.NewMDMConfigurationsHandler(services.ServerURL)
 	deviceEnroll := handlers.NewDeviceEnrollHandler(services.LicenseProvider)
-	authProviders := handlers.NewAuthProviderHandler(services.ProviderDispatcher, services.PostgresDSN, services.LicenseProvider)
+	authProviders := handlers.NewAuthProviderHandler(services.ProviderDispatcher, services.PostgresDSN, services.LicenseProvider, services.LDAPAuthProvider)
 	localAuth := handlers.NewLocalAuthHandler(services.LocalAuthProvider)
 	defaultModelAliases := handlers.NewDefaultModelAliasHandler()
 	images := handlers.NewImageHandler()
@@ -605,6 +605,8 @@ func NewRouter(ctx context.Context, services *services.Services) (*Router, error
 	mux.HandleFunc("POST /api/auth-providers/{id}/configure", authProviders.Configure)
 	mux.HandleFunc("POST /api/auth-providers/{id}/deconfigure", authProviders.Deconfigure)
 	mux.HandleFunc("POST /api/auth-providers/{id}/reveal", authProviders.Reveal)
+	mux.HandleFunc("POST /api/auth-providers/{id}/user-sync/preview", authProviders.LDAPSyncPreview)
+	mux.HandleFunc("POST /api/auth-providers/{id}/user-sync/apply", authProviders.LDAPSyncApply)
 
 	// Local auth provider users
 	mux.HandleFunc("GET /api/local-auth/users", localAuth.List)

@@ -105,7 +105,13 @@ func (s *Server) getUsers(apiContext api.Context) error {
 			effectiveRole = role
 		}
 
-		items = append(items, *types.ConvertUserWithEffectiveRole(&user, apiContext.GatewayClient.HasExplicitRole(user.Email) != types2.RoleUnknown, "", effectiveRole))
+		converted := types.ConvertUserWithEffectiveRole(&user, apiContext.GatewayClient.HasExplicitRole(user.Email) != types2.RoleUnknown, "", effectiveRole)
+		if identities, err := apiContext.GatewayClient.FindIdentitiesForUser(apiContext.Context(), user.ID); err == nil {
+			for _, identity := range identities {
+				converted.AuthProviderSources = append(converted.AuthProviderSources, identity.AuthProviderName)
+			}
+		}
+		items = append(items, *converted)
 	}
 
 	return apiContext.Write(types2.UserList{Items: items})

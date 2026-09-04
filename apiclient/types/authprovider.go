@@ -14,7 +14,8 @@ type AuthProviderManifest struct {
 
 type AuthProviderStatus struct {
 	CommonProviderStatus
-	Namespace string `json:"namespace,omitempty"`
+	Namespace        string `json:"namespace,omitempty"`
+	SupportsUserSync bool   `json:"supportsUserSync,omitempty"`
 }
 
 type AuthProviderList List[AuthProvider]

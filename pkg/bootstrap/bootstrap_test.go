@@ -18,8 +18,11 @@ import (
 
 type staticAuthProviderGetter string
 
-func (s staticAuthProviderGetter) GetConfiguredAuthProvider(context.Context) (string, error) {
-	return string(s), nil
+func (s staticAuthProviderGetter) ListConfiguredAuthProviders(context.Context) ([]string, error) {
+	if s == "" {
+		return nil, nil
+	}
+	return []string{string(s)}, nil
 }
 
 func newBootstrapTestClient(t *testing.T) (*client.Client, context.Context) {

@@ -18,6 +18,10 @@ type Identity struct {
 	IconURL               string    `json:"iconURL"`
 	IconLastChecked       time.Time `json:"iconLastChecked"`
 	Encrypted             bool      `json:"encrypted"`
+	// DisabledAt is set by directory synchronization when the LDAP entry is no
+	// longer eligible. The identity remains for audit/history and can be
+	// re-enabled if the entry returns.
+	DisabledAt            *time.Time `json:"disabledAt,omitempty" gorm:"index"`
 
 	// AuthProviderGroupsLastChecked is the last time the identity's auth provider groups were checked.
 	AuthProviderGroupsLastChecked time.Time `json:"authProviderGroupsLastChecked"`

@@ -773,9 +773,16 @@ func (c *Controller) ensureAuthProvidersAndModelProviders(ctx context.Context) e
 	// If there are no auth providers from the registry, then read the registry to get them
 	// populated and statuses set. This works around a problem where the controllers weren't
 	// shutting down properly, which caused a significant delay in startup when upgrading from
-	// v0.22.1. The built-in local auth provider doesn't come from the registry, so it doesn't
-	// count towards this check.
-	if len(authProviders.Items) <= 1 {
+	// v0.22.1. Built-in providers do not come from the registry. Count registry
+	// providers explicitly so adding another built-in provider (LDAP) cannot make
+	// a new installation skip the registry bootstrap.
+	registryProviderCount := 0
+	for _, authProvider := range authProviders.Items {
+		if authProvider.Name != localauth.ProviderName && authProvider.Name != ldapauth.ProviderName {
+			registryProviderCount++
+		}
+	}
+	if registryProviderCount == 0 {
 		if err := c.providerHandler.ReadFromRegistry(ctx, c.services.StorageClient); err != nil {
 			return fmt.Errorf("failed to read from registry: %w", err)
 		}

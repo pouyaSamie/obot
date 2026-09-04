@@ -23,9 +23,12 @@ func TestProfileFromEntryPrefixesDirectGroups(t *testing.T) {
 	}
 }
 
-func TestGroupNameRejectsNonDN(t *testing.T) {
+func TestGroupNameUsesLDAPDNParser(t *testing.T) {
+	if got, want := groupName("CN=Engineering\\, Platform,OU=Groups,DC=example,DC=com"), "Engineering, Platform"; got != want {
+		t.Fatalf("groupName() = %q, want %q", got, want)
+	}
 	if got := groupName("not-a-dn"); got != "" {
-		t.Fatalf("groupName = %q, want empty", got)
+		t.Fatalf("groupName(invalid) = %q", got)
 	}
 }
 
@@ -44,10 +47,55 @@ func TestConfigFromValuesUsesUIValuesAndDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config.UserFilter != "(&(objectClass=person)(uid={username}))" || config.UserIDAttribute != "uid" {
+	if config.UserFilter != "(|(uid={username})(mail={username}))" || config.UserIDAttribute != "uid" || config.SyncUserFilter != "(objectClass=person)" {
 		t.Fatalf("unexpected defaults: %+v", config)
 	}
 	if !config.InsecureSkipVerify || config.StartTLS || config.CACertificate != "first\nsecond" {
 		t.Fatalf("unexpected UI configuration: %+v", config)
+	}
+}
+
+func TestLDAPConfigRequiresUsernamePlaceholder(t *testing.T) {
+	_, err := (Config{URL: "ldap://ldap.example.com", BindDN: "cn=service,dc=example,dc=com", UserBaseDN: "dc=example,dc=com", UserFilter: "(uid=user)"}).validate()
+	if err == nil {
+		t.Fatal("expected login-filter validation error")
+	}
+}
+
+func TestLDAPConfigRejectsMalformedSyncFilter(t *testing.T) {
+	_, err := (Config{
+		URL:            "ldap://ldap.example.com",
+		BindDN:         "cn=service,dc=example,dc=com",
+		UserBaseDN:     "dc=example,dc=com",
+		UserFilter:     "(uid={username})",
+		SyncUserFilter: "(&(objectClass=person)",
+	}).validate()
+	if err == nil {
+		t.Fatal("expected LDAP sync filter validation error")
+	}
+}
+
+func TestProfileFromEntryKeepsADUsernameAndEncodesBinaryGUID(t *testing.T) {
+	rawGUID := string([]byte{0, 255, 1, 2})
+	entry := &ldap.Entry{Attributes: []*ldap.EntryAttribute{
+		{Name: "objectGUID", Values: []string{rawGUID}},
+		{Name: "sAMAccountName", Values: []string{"jane"}},
+		{Name: "mail", Values: []string{"jane@example.com"}},
+		{Name: "displayName", Values: []string{"Jane Doe"}},
+	}}
+	profile := profileFromEntry(entry, "", Config{
+		UserIDAttribute:   "objectGUID",
+		UsernameAttribute: "sAMAccountName",
+		EmailAttribute:    "mail",
+		NameAttribute:     "displayName",
+	}.normalized())
+	if profile.Username != "jane" {
+		t.Fatalf("username = %q, want jane", profile.Username)
+	}
+	if profile.ID != "ldap-b64:AP8BAg" {
+		t.Fatalf("stable binary ID = %q", profile.ID)
+	}
+	if got := rawLDAPID(profile.ID); got != rawGUID {
+		t.Fatalf("rawLDAPID() = %v, want original binary GUID", []byte(got))
 	}
 }

@@ -33,6 +33,10 @@ type User struct {
 	DailyOutputTokensLimit int       `json:"dailyOutputTokensLimit"`
 	DailyTotalTokensLimit  int       `json:"dailyTotalTokensLimit"`
 	Encrypted              bool      `json:"encrypted"`
+	// DisabledAt is set only when every authentication identity for the user is
+	// disabled. The row is retained so roles, history, and application data are
+	// preserved if the directory entry later returns.
+	DisabledAt             *time.Time `json:"disabledAt,omitempty" gorm:"index"`
 	// Soft delete fields
 	DeletedAt        *time.Time `json:"deletedAt,omitempty"`
 	OriginalEmail    string     `json:"-"`
@@ -80,6 +84,7 @@ func ConvertUserWithEffectiveRole(u *User, roleFixed bool, authProviderName stri
 		DailyTotalTokensLimit:  u.DailyTotalTokensLimit,
 		OriginalEmail:          u.OriginalEmail,
 		OriginalUsername:       u.OriginalUsername,
+		Disabled:               u.DisabledAt != nil,
 	}
 
 	if u.DeletedAt != nil {

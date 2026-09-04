@@ -42,6 +42,7 @@ import type {
 	ModelAccessPolicy,
 	ModelAccessPolicyManifest,
 	AuthProvider,
+	LDAPSyncSummary,
 	MCPFilter,
 	MCPFilterManifest,
 	TempUser,
@@ -2392,6 +2393,14 @@ export async function listTokenUsage(
 export async function listRemainingTokenUsageForUser(userId: string, opts?: { fetch?: Fetcher }) {
 	const response = await doGet(`/users/${userId}/remaining-token-usage`, opts);
 	return response;
+}
+
+export async function previewLDAPUserSync(id: string, opts?: { fetch?: Fetcher }): Promise<LDAPSyncSummary> {
+	return (await doPost(`/auth-providers/${id}/user-sync/preview`, {}, opts)) as LDAPSyncSummary;
+}
+
+export async function applyLDAPUserSync(id: string, previewToken: string, opts?: { fetch?: Fetcher }): Promise<LDAPSyncSummary> {
+	return (await doPost(`/auth-providers/${id}/user-sync/apply`, { previewToken }, opts)) as LDAPSyncSummary;
 }
 
 export async function getUsageSettings(opts?: { fetch?: Fetcher }): Promise<UsageSettings> {

@@ -261,7 +261,21 @@ export interface BaseProvider {
 	path?: string;
 }
 export interface AuthProvider extends BaseProvider {
+	supportsUserSync?: boolean;
 	type: 'authprovider';
+}
+
+export interface LDAPSyncSummary {
+	previewToken?: string;
+	created: number;
+	updated: number;
+	linked: number;
+	disabled: number;
+	unchanged: number;
+	skipped: number;
+	conflicts: number;
+	issues: string[];
+	snapshotHash: string;
 }
 
 // A user of the built-in local auth provider. Passwords are never returned by the API.

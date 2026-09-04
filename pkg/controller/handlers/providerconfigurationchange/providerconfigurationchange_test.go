@@ -118,7 +118,7 @@ func TestConfigureAuthProviderAppliesAndCleansUp(t *testing.T) {
 	require.True(t, apierrors.IsNotFound(err))
 }
 
-func TestConfigureAuthProviderRejectsConflictingConfiguredProvider(t *testing.T) {
+func TestConfigureAuthProviderAllowsCoexistingConfiguredProvider(t *testing.T) {
 	configuredProvider := &v1.AuthProvider{
 		Name:      "configured-auth-provider",
 		Namespace: system.DefaultNamespace,
@@ -167,10 +167,10 @@ func TestConfigureAuthProviderRejectsConflictingConfiguredProvider(t *testing.T)
 		Namespace: change.Namespace,
 		Name:      change.Name,
 	}, nil))
-	require.NotEmpty(t, change.Status.Error)
-	assert.Contains(t, change.Status.Error, configuredProvider.Name)
-	_, err = gatewayClient.RevealCredential(t.Context(), []string{targetProvider.Name}, targetProvider.Name)
-	require.ErrorAs(t, err, &gatewayclient.CredentialNotFoundError{})
+	require.Empty(t, change.Status.Error)
+	targetCredential, err := gatewayClient.RevealCredential(t.Context(), []string{targetProvider.Name}, targetProvider.Name)
+	require.NoError(t, err)
+	assert.Equal(t, "target-secret", targetCredential.Secrets["CLIENT_SECRET"])
 	configuredCredential, err := gatewayClient.RevealCredential(t.Context(), []string{configuredProvider.Name}, configuredProvider.Name)
 	require.NoError(t, err)
 	assert.Equal(t, "configured-secret", configuredCredential.Secrets["CLIENT_SECRET"])

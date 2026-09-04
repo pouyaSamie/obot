@@ -163,6 +163,9 @@
 		if (user?.deletedAt) {
 			display += ' (Deleted)';
 		}
+		if (user?.disabled) {
+			display += ' (Disabled)';
+		}
 
 		return display;
 	}
@@ -250,6 +253,17 @@
 						{:else if property === 'effectiveRole'}
 							<div class="flex items-center gap-1">
 								{d.effectiveRole}
+							</div>
+						{:else if property === 'name'}
+							<div class="flex flex-col gap-1">
+								<span>{d.name}</span>
+								{#if d.authProviderSources?.length}
+									<div class="flex flex-wrap gap-1">
+										{#each d.authProviderSources as source}
+											<span class="badge badge-sm">{source.replace('-auth-provider', '')}</span>
+										{/each}
+									</div>
+								{/if}
 							</div>
 						{:else if property === 'lastActiveDay' || property === 'created'}
 							{d[property as keyof typeof d] ? formatTimeAgo(d[property], 'day').relativeTime : '-'}
