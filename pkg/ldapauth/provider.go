@@ -194,11 +194,21 @@ func (p *Provider) ValidateConfig(ctx context.Context, config Config) error {
 	attrs := directoryAttributes(config)
 	loginFilter := strings.ReplaceAll(config.UserFilter, "{username}", ldap.EscapeFilter("obot-configuration-check"))
 	for _, filter := range []string{loginFilter, config.SyncUserFilter} {
-		if _, err := conn.Search(ldap.NewSearchRequest(config.UserBaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 10, false, filter, attrs, nil)); err != nil {
+		if _, err := conn.Search(ldap.NewSearchRequest(config.UserBaseDN, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 10, false, filter, attrs, nil)); err != nil && !isValidationSizeLimit(err) {
 			return fmt.Errorf("LDAP search validation: %w", err)
 		}
 	}
 	return nil
+}
+
+// Active Directory returns LDAPResultSizeLimitExceeded after a successful
+// search when a request deliberately asks for only one entry. That proves the
+// bind, base DN, and filter work, which is all configuration validation needs.
+// Directory synchronization uses RFC 2696 paging and still treats any error as
+// a failure before it can disable identities.
+func isValidationSizeLimit(err error) bool {
+	var ldapErr *ldap.Error
+	return errors.As(err, &ldapErr) && ldapErr.ResultCode == ldap.LDAPResultSizeLimitExceeded
 }
 
 // ConfigurationRevision identifies the complete active LDAP configuration

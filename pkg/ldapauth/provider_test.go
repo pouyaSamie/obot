@@ -1,6 +1,7 @@
 package ldapauth
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/go-ldap/ldap/v3"
@@ -97,5 +98,14 @@ func TestProfileFromEntryKeepsADUsernameAndEncodesBinaryGUID(t *testing.T) {
 	}
 	if got := rawLDAPID(profile.ID); got != rawGUID {
 		t.Fatalf("rawLDAPID() = %v, want original binary GUID", []byte(got))
+	}
+}
+
+func TestValidationAcceptsLDAPSearchSizeLimit(t *testing.T) {
+	if !isValidationSizeLimit(ldap.NewError(ldap.LDAPResultSizeLimitExceeded, errors.New("limit reached"))) {
+		t.Fatal("expected validation to accept LDAP size-limit result")
+	}
+	if isValidationSizeLimit(ldap.NewError(ldap.LDAPResultInvalidCredentials, errors.New("bad credentials"))) {
+		t.Fatal("unexpected acceptance of non-size-limit LDAP error")
 	}
 }

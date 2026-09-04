@@ -30,8 +30,8 @@ func AuthProvider() *v1.AuthProvider {
 					{Name: UserBaseDNConfigKey, FriendlyName: "User Base DN", Description: "Directory root below which Obot searches for users, for example DC=example,DC=com."},
 				},
 				OptionalConfigurationParameters: []types.ProviderConfigurationParameter{
-					{Name: UserFilterConfigKey, FriendlyName: "Login Filter", Description: "Used only when a person signs in. It must contain {username}; for AD username or email use (|(sAMAccountName={username})(mail={username})). Do not paste the Confluence User Object Filter here."},
-					{Name: SyncUserFilterConfigKey, FriendlyName: "User Sync Filter", Description: "Used only by the manual directory sync. This is the equivalent of Confluence's User Object Filter and does not use {username}. Defaults to (objectClass=person)."},
+					{Name: UserFilterConfigKey, FriendlyName: "Login Filter", Description: "Used only when a person signs in. It must contain {username}; for AD username or email use (|(sAMAccountName={username})(mail={username})). Use User Sync Filter to choose which directory users to import."},
+					{Name: SyncUserFilterConfigKey, FriendlyName: "User Sync Filter", Description: "Used only by the manual directory sync. It does not use {username}. Defaults to (objectClass=person)."},
 					{Name: UserIDAttributeConfigKey, FriendlyName: "Stable User ID Attribute", Description: "Identity key across renames. For Active Directory use objectGUID; default is uid."},
 					{Name: UsernameAttributeConfigKey, FriendlyName: "Username Attribute", Description: "Username shown by Obot. For Active Directory use sAMAccountName; defaults to the Stable User ID Attribute."},
 					{Name: EmailAttributeConfigKey, FriendlyName: "Email Attribute", Description: "For Active Directory use mail."},
