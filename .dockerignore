@@ -1,4 +1,9 @@
 **/node_modules/
+.git/
+.pnpm-store/
+bin/
+ui/user/build/
+ui/user/.svelte-kit/
 __obot_local_build*.log
 .local/
 obot-tools/
