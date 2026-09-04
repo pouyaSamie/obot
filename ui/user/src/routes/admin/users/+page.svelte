@@ -8,8 +8,17 @@
 	import Search from '$lib/components/Search.svelte';
 	import Table from '$lib/components/table/Table.svelte';
 	import { PAGE_TRANSITION_DURATION } from '$lib/constants';
+	import { parseErrorContent } from '$lib/errors';
 	import Loading from '$lib/icons/Loading.svelte';
-	import { AdminService, UserService, Group, Role, type OrgUser } from '$lib/services';
+	import {
+		AdminService,
+		UserService,
+		Group,
+		Role,
+		type OrgUser,
+		type AuthProvider,
+		type LDAPSyncSummary
+	} from '$lib/services';
 	import { userRoleOptions } from '$lib/services/admin/constants';
 	import { profile } from '$lib/stores';
 	import { formatTimeAgo } from '$lib/time';
@@ -22,13 +31,14 @@
 		setFilterUrlParams
 	} from '$lib/url.js';
 	import { getUserRoleLabel } from '$lib/utils';
-	import { Handshake, Info, ShieldAlert } from '@lucide/svelte';
+	import { Handshake, Info, RefreshCw, ShieldAlert } from '@lucide/svelte';
 	import { debounce } from 'es-toolkit';
 	import { untrack } from 'svelte';
 	import { fade } from 'svelte/transition';
 
 	let { data } = $props();
 	let users = $state<OrgUser[]>(untrack(() => data.users));
+	let authProviders = $state<AuthProvider[]>(untrack(() => data.authProviders ?? []));
 	let query = $derived(page.url.searchParams.get('query') ?? '');
 	let urlFilters = $derived(getTableUrlParamsFilters());
 	let initSort = $derived(getTableUrlParamsSort({ property: 'created', order: 'desc' }));
@@ -66,6 +76,11 @@
 	let confirmUserImpersonationAdditionToUser = $state<TableItem>();
 	let loading = $state(false);
 	let roleUpdateError = $state('');
+	let ldapSyncDialog = $state<ReturnType<typeof ResponsiveDialog>>();
+	let ldapSyncPreview = $state<LDAPSyncSummary>();
+	let ldapSyncError = $state('');
+	let ldapSyncLoading = $state(false);
+	let ldapSyncApplied = $state(false);
 	let roleOptions = $derived([
 		...(profile.current.groups.includes(Group.OWNER) ? [{ label: 'Owner', id: Role.OWNER }] : []),
 		{ label: 'Admin', id: Role.ADMIN },
@@ -74,6 +89,51 @@
 		{ label: 'Basic User', id: Role.BASIC }
 	]);
 	let isAdminReadonly = $derived(profile.current.isAdminReadonly?.());
+	let ldapConfigured = $derived(
+		authProviders.some((provider) => provider.supportsUserSync && provider.configured)
+	);
+
+	function resetLDAPSyncDialog() {
+		ldapSyncPreview = undefined;
+		ldapSyncError = '';
+		ldapSyncLoading = false;
+		ldapSyncApplied = false;
+	}
+
+	async function previewLDAPSync() {
+		resetLDAPSyncDialog();
+		ldapSyncLoading = true;
+		ldapSyncDialog?.open();
+		try {
+			ldapSyncPreview = await AdminService.previewLDAPUserSync('ldap-auth-provider');
+		} catch (error) {
+			ldapSyncError = parseErrorContent(error).message;
+		} finally {
+			ldapSyncLoading = false;
+		}
+	}
+
+	async function applyLDAPSync() {
+		if (!ldapSyncPreview?.previewToken) {
+			ldapSyncError = 'The LDAP preview expired. Run a new preview before applying changes.';
+			return;
+		}
+		ldapSyncLoading = true;
+		ldapSyncError = '';
+		try {
+			ldapSyncPreview = await AdminService.applyLDAPUserSync(
+				'ldap-auth-provider',
+				ldapSyncPreview.previewToken
+			);
+			ldapSyncApplied = true;
+			users = await UserService.listUsers();
+			authProviders = await AdminService.listAuthProviders();
+		} catch (error) {
+			ldapSyncError = parseErrorContent(error).message;
+		} finally {
+			ldapSyncLoading = false;
+		}
+	}
 
 	function closeUpdateRoleDialog() {
 		updateRoleDialog?.close();
@@ -211,12 +271,31 @@
 	<div class="mb-4" in:fade={{ duration }} out:fade={{ duration }}>
 		<div class="flex flex-col gap-8">
 			<div class="flex flex-col gap-2">
-				<Search
-					value={query}
-					class="dark:bg-base-200 dark:border-base-400 bg-base-100 border border-transparent shadow-sm"
-					onChange={updateQuery}
-					placeholder="Search by name or email..."
-				/>
+				<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+					<div class="min-w-0 flex-1">
+						<Search
+							value={query}
+							class="dark:bg-base-200 dark:border-base-400 bg-base-100 border border-transparent shadow-sm"
+							onChange={updateQuery}
+							placeholder="Search by name or email..."
+						/>
+					</div>
+					<button
+						class="btn btn-secondary shrink-0"
+						disabled={!ldapConfigured || ldapSyncLoading || isAdminReadonly}
+						title={!ldapConfigured
+							? 'Configure LDAP on the Auth Providers page before synchronizing users.'
+							: undefined}
+						onclick={previewLDAPSync}
+					>
+						{#if ldapSyncLoading}
+							<Loading class="size-4" />
+						{:else}
+							<RefreshCw class="size-4" />
+						{/if}
+						Sync LDAP users
+					</button>
+				</div>
 				<Table
 					data={tableData}
 					fields={['name', 'email', 'role', 'effectiveRole', 'lastActiveDay', 'created']}
@@ -303,6 +382,83 @@
 		</div>
 	</div>
 </Layout>
+
+<ResponsiveDialog
+	bind:this={ldapSyncDialog}
+	class="w-full max-w-xl"
+	onClose={resetLDAPSyncDialog}
+>
+	{#snippet titleContent()}
+		<h3 class="text-lg font-semibold">Review LDAP user synchronization</h3>
+	{/snippet}
+	<div class="flex min-h-40 flex-col gap-4 p-4 text-sm">
+		{#if ldapSyncLoading && !ldapSyncPreview}
+			<div class="flex flex-1 items-center justify-center gap-2 text-muted-content" role="status">
+				<Loading class="size-5" />
+				Reading the LDAP directory…
+			</div>
+		{:else if ldapSyncError && !ldapSyncPreview}
+			<div class="notification-error flex items-start gap-2 p-3" role="alert">
+				<p class="min-w-0 break-words [overflow-wrap:anywhere]">{ldapSyncError}</p>
+			</div>
+			<div class="mt-auto flex justify-end gap-2">
+				<button class="btn btn-secondary" onclick={() => ldapSyncDialog?.close()}>Close</button>
+				<button class="btn btn-primary" onclick={previewLDAPSync}>Try again</button>
+			</div>
+		{:else if ldapSyncPreview}
+			{#if ldapSyncApplied}
+				<div class="notification-info p-3" role="status">
+					LDAP user synchronization completed. The Users table has been refreshed.
+				</div>
+			{:else}
+				<p class="text-muted-content">
+					Review these proposed changes before updating Obot users. Existing roles, token limits,
+					workspaces, and application data are preserved.
+				</p>
+			{/if}
+			<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+				<div class="bg-base-200 rounded-md p-2"><span class="text-muted-content block text-xs">Create</span><strong>{ldapSyncPreview.created}</strong></div>
+				<div class="bg-base-200 rounded-md p-2"><span class="text-muted-content block text-xs">Link</span><strong>{ldapSyncPreview.linked}</strong></div>
+				<div class="bg-base-200 rounded-md p-2"><span class="text-muted-content block text-xs">Update</span><strong>{ldapSyncPreview.updated}</strong></div>
+				<div class="bg-base-200 rounded-md p-2"><span class="text-muted-content block text-xs">Disable</span><strong>{ldapSyncPreview.disabled}</strong></div>
+				<div class="bg-base-200 rounded-md p-2"><span class="text-muted-content block text-xs">Unchanged</span><strong>{ldapSyncPreview.unchanged}</strong></div>
+				<div class="bg-base-200 rounded-md p-2"><span class="text-muted-content block text-xs">Skipped</span><strong>{ldapSyncPreview.skipped}</strong></div>
+			</div>
+			{#if ldapSyncPreview.conflicts > 0}
+				<div class="notification-error p-3" role="alert">
+					{ldapSyncPreview.conflicts} conflicting directory record(s) must be resolved before applying.
+				</div>
+			{/if}
+			{#if (ldapSyncPreview.issues ?? []).length > 0}
+				<ul class="text-error list-disc space-y-1 px-5 break-words [overflow-wrap:anywhere]">
+					{#each ldapSyncPreview.issues ?? [] as issue}
+						<li>{issue}</li>
+					{/each}
+				</ul>
+			{/if}
+			{#if ldapSyncError}
+				<div class="notification-error p-3" role="alert">{ldapSyncError}</div>
+			{/if}
+			<div class="mt-auto flex justify-end gap-2">
+				<button class="btn btn-secondary" onclick={() => ldapSyncDialog?.close()}>
+					{ldapSyncApplied ? 'Done' : 'Cancel'}
+				</button>
+				{#if !ldapSyncApplied}
+					<button
+						class="btn btn-primary"
+						disabled={ldapSyncLoading || ldapSyncPreview.conflicts > 0}
+						onclick={applyLDAPSync}
+					>
+						{#if ldapSyncLoading}<Loading class="size-4" />{/if}
+						Apply sync
+					</button>
+				{/if}
+			</div>
+		{:else}
+			<div class="flex flex-1 items-center justify-center text-muted-content">No LDAP preview is available.</div>
+		{/if}
+	</div>
+</ResponsiveDialog>
 
 <Confirm
 	msg={`Delete user ${deletingUser?.email}?`}

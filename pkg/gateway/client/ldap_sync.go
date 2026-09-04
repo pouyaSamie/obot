@@ -22,10 +22,16 @@ type LDAPSyncUser struct {
 }
 
 type LDAPSyncSummary struct {
-	Created, Updated, Linked, Disabled, Unchanged, Skipped, Conflicts int
-	Issues                                                       []string
-	SnapshotHash                                                 string
-	PreviewToken                                                 string
+	Created      int      `json:"created"`
+	Updated      int      `json:"updated"`
+	Linked       int      `json:"linked"`
+	Disabled     int      `json:"disabled"`
+	Unchanged    int      `json:"unchanged"`
+	Skipped      int      `json:"skipped"`
+	Conflicts    int      `json:"conflicts"`
+	Issues       []string `json:"issues"`
+	SnapshotHash string   `json:"snapshotHash"`
+	PreviewToken string   `json:"previewToken,omitempty"`
 }
 
 func (c *Client) PreviewLDAPSync(ctx context.Context, providerNamespace, providerName string, entries []LDAPSyncUser) (LDAPSyncSummary, error) {

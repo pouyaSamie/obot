@@ -15,7 +15,7 @@
 	import { HttpError, parseErrorContent } from '$lib/errors.js';
 	import { reloadPage } from '$lib/navigation';
 	import { AdminService, UserService } from '$lib/services';
-	import type { AuthProvider, LDAPSyncSummary } from '$lib/services/admin/types.js';
+	import type { AuthProvider } from '$lib/services/admin/types.js';
 	import { errors, profile, version } from '$lib/stores';
 	import { adminConfigStore } from '$lib/stores/adminConfig.svelte.js';
 	import { clearUrlParams } from '$lib/url';
@@ -68,10 +68,6 @@
 
 	let loading = $state(false);
 	let configureError = $state<string>();
-	let ldapSyncDialog = $state<ReturnType<typeof ResponsiveDialog>>();
-	let ldapSyncPreview = $state<LDAPSyncSummary>();
-	let ldapSyncError = $state<string>();
-	let ldapSyncLoading = $state(false);
 
 	let deconfigureAuthProviderDialog = $state<ReturnType<typeof ProviderDeconfigureConfirm>>();
 	let confirmDeconfigureAuthProvider = $state<AuthProvider>();
@@ -82,37 +78,6 @@
 	let isBootstrapUser = $derived(profile.current.isBootstrapUser?.());
 
 	const duration = PAGE_TRANSITION_DURATION;
-	const ldapConfigured = $derived(authProviders.find((provider) => provider.supportsUserSync && provider.configured));
-
-	async function previewLDAPSync() {
-		ldapSyncLoading = true;
-		ldapSyncError = undefined;
-		try {
-			ldapSyncPreview = await AdminService.previewLDAPUserSync('ldap-auth-provider');
-			ldapSyncDialog?.open();
-		} catch (error) {
-			ldapSyncError = parseErrorContent(error).message;
-		} finally {
-			ldapSyncLoading = false;
-		}
-	}
-
-	async function applyLDAPSync() {
-		if (!ldapSyncPreview) return;
-		ldapSyncLoading = true;
-		ldapSyncError = undefined;
-		try {
-		if (!ldapSyncPreview.previewToken) throw new Error('LDAP sync preview expired; preview again.');
-		ldapSyncPreview = await AdminService.applyLDAPUserSync('ldap-auth-provider', ldapSyncPreview.previewToken);
-			authProviders = await AdminService.listAuthProviders();
-			adminConfigStore.updateAuthProviders(authProviders);
-		} catch (error) {
-			ldapSyncError = parseErrorContent(error).message;
-		} finally {
-			ldapSyncLoading = false;
-		}
-	}
-
 	const prepareOwnerSetup = async () => {
 		// Don't prompt for owner login while the local auth modal is open — the admin may still be
 		// configuring it or adding the first user.
@@ -347,11 +312,6 @@
 				/>
 			{/each}
 		</div>
-		{#if ldapConfigured}
-			<div class="flex justify-end">
-				<button class="btn btn-secondary" disabled={ldapSyncLoading || profile.current.isAdminReadonly?.()} onclick={previewLDAPSync}>Sync LDAP users</button>
-			</div>
-		{/if}
 	</div>
 </Layout>
 
@@ -479,19 +439,6 @@
 			</a>
 		</div>
 	</div>
-</ResponsiveDialog>
-
-<ResponsiveDialog bind:this={ldapSyncDialog} class="w-full max-w-xl">
-	{#snippet titleContent()}<h3 class="text-lg font-semibold">Review LDAP user synchronization</h3>{/snippet}
-	{#if ldapSyncPreview}
-		<div class="flex flex-col gap-3 p-4 text-sm">
-			<p>This applies the reviewed LDAP directory snapshot to existing Obot users. Roles, limits, and existing user data are preserved.</p>
-			<div class="grid grid-cols-2 gap-2"><span>New: {ldapSyncPreview.created}</span><span>Linked: {ldapSyncPreview.linked}</span><span>Updated: {ldapSyncPreview.updated}</span><span>Disabled: {ldapSyncPreview.disabled}</span><span>Skipped: {ldapSyncPreview.skipped}</span><span>Conflicts: {ldapSyncPreview.conflicts}</span></div>
-			{#if ldapSyncPreview.issues.length > 0}<ul class="list-disc px-5 text-error">{#each ldapSyncPreview.issues as issue}<li>{issue}</li>{/each}</ul>{/if}
-			{#if ldapSyncError}<p class="text-error">{ldapSyncError}</p>{/if}
-			<div class="flex justify-end gap-2"><button class="btn btn-secondary" onclick={() => ldapSyncDialog?.close()}>Cancel</button><button class="btn btn-primary" disabled={ldapSyncLoading || ldapSyncPreview.conflicts > 0} onclick={applyLDAPSync}>Apply sync</button></div>
-		</div>
-	{/if}
 </ResponsiveDialog>
 
 <svelte:head>

@@ -14,8 +14,10 @@ function Wait-ForHealth {
     $deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)
     do {
         try {
-            $response = Invoke-WebRequest -Uri $healthURL -UseBasicParsing -TimeoutSec 5
-            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+            $response = Invoke-WebRequest -Uri $healthURL -UseBasicParsing -SkipHttpErrorCheck -TimeoutSec 5
+            # Obot does not expose a route at /, so a 404 proves the HTTP server
+            # is ready just as reliably as a 2xx response. Server errors do not.
+            if ($response.StatusCode -lt 500) {
                 return
             }
         } catch {
