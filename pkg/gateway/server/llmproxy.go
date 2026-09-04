@@ -93,6 +93,7 @@ type llmProviderProxyBackend interface {
 type llmProviderProxy struct {
 	dailyUserInputTokenLimit  int
 	dailyUserOutputTokenLimit int
+	dailyUserTotalTokenLimit  int
 	backend                   llmProviderProxyBackend
 	modelProvider             *v1.ModelProvider
 	mapHelper                 *modelaccesspolicy.Helper
@@ -936,6 +937,7 @@ func (s *Server) newLLMProviderProxy(u *url.URL, modelProviderName string) *llmP
 	return &llmProviderProxy{
 		dailyUserInputTokenLimit:  s.dailyUserInputTokenLimit,
 		dailyUserOutputTokenLimit: s.dailyUserOutputTokenLimit,
+		dailyUserTotalTokenLimit:  s.dailyUserTotalTokenLimit,
 		backend:                   apiKeyLLMProviderBackend{u: *u, providerName: modelProviderName},
 		mapHelper:                 s.mapHelper,
 		messagePolicyHelper:       s.messagePolicyHelper,
@@ -1073,10 +1075,11 @@ func (l *llmProviderProxy) proxy(req api.Context) (retErr error) {
 		tokenUsageTimePeriod,
 		l.dailyUserInputTokenLimit,
 		l.dailyUserOutputTokenLimit,
+		l.dailyUserTotalTokenLimit,
 	); err != nil {
 		return err
 	} else if remainingUsage.IsDepleted() {
-		return types2.NewErrHTTP(http.StatusTooManyRequests, fmt.Sprintf("no tokens remaining (input tokens remaining: %d, output tokens remaining: %d)", remainingUsage.InputTokens, remainingUsage.OutputTokens))
+		return types2.NewErrHTTP(http.StatusTooManyRequests, fmt.Sprintf("no tokens remaining (input tokens remaining: %d, output tokens remaining: %d, total tokens remaining: %d)", remainingUsage.InputTokens, remainingUsage.OutputTokens, remainingUsage.TotalTokens))
 	}
 
 	transport, err := l.backend.transport(*modelProvider, credEnv)

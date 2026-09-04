@@ -53,6 +53,7 @@ export interface AppNotificationManifest {
 // App preferences
 
 export interface AppPreferencesManifest {
+	appName?: string;
 	logos?: {
 		logoIcon?: string;
 		logoIconError?: string;
@@ -581,26 +582,6 @@ export interface ServerK8sSettings {
 	needsK8sUpdate: boolean;
 	currentSettings: K8sSettings;
 	deployedSettingsHash: string;
-}
-
-// Licensing
-export interface License {
-	licenseKey: string;
-	source: string;
-	locked: boolean;
-	enterprise: boolean;
-	entitlements: string[] | null;
-	manualCheckAvailableAt?: string;
-}
-
-export interface LicenseManifest {
-	licenseKey: string;
-}
-
-export interface CommunityLicenseEnrollment {
-	name: string;
-	email: string;
-	company?: string;
 }
 
 // LLM audit logs
@@ -1590,6 +1571,10 @@ export interface TotalTokenUsage {
 }
 export interface TotalTokenUsageByUser extends TotalTokenUsage {
 	userID: string;
+}
+
+export interface UsageSettings {
+	dailyUserTotalTokenLimit: number;
 }
 
 // MDM configurations — fleets that unattended devices enroll into. Saving

@@ -1,0 +1,71 @@
+{{- if .Values.rag.enabled }}
+{{- $repository := required "rag.image.repository is required when rag.enabled=true" .Values.rag.image.repository }}
+{{- range .Values.rag.collections }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "obot.fullname" $ }}-rag-{{ .name }}
+  labels:
+    {{- include "obot.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: rag-mcp
+    obot.obot.ai/rag-collection: {{ .name | quote }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "obot.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: rag-mcp
+      obot.obot.ai/rag-collection: {{ .name | quote }}
+  template:
+    metadata:
+      labels:
+        {{- include "obot.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: rag-mcp
+        obot.obot.ai/rag-collection: {{ .name | quote }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: retrieval-mcp
+          image: "{{ $repository }}:{{ required "rag.image.tag is required when rag.enabled=true" $.Values.rag.image.tag }}"
+          imagePullPolicy: {{ $.Values.rag.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $.Values.rag.servicePort }}
+          env:
+            - name: RAG_COLLECTION
+              value: {{ .name | quote }}
+            - name: RAG_ALLOWED_GROUPS
+              value: {{ .allowedGroups | quote }}
+            - name: MCP_TRANSPORT
+              value: streamable-http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "obot.fullname" $ }}-rag-{{ .name }}
+  labels:
+    {{- include "obot.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: rag-mcp
+spec:
+  selector:
+    {{- include "obot.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: rag-mcp
+    obot.obot.ai/rag-collection: {{ .name | quote }}
+  ports:
+    - name: http
+      port: {{ $.Values.rag.servicePort }}
+      targetPort: http
+{{- end }}
+{{- end }}

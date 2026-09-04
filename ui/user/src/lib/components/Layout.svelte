@@ -55,8 +55,6 @@
 	import Navbar from '$lib/components/Navbar.svelte';
 	import {
 		ADMIN_AGENT_DISABLED_MESSAGE,
-		COMMUNITY_ENTITLEMENT,
-		ENTERPRISE_ENTITLEMENT,
 		USER_AGENT_DISABLED_MESSAGE
 	} from '$lib/constants';
 	import {
@@ -70,19 +68,16 @@
 	import {
 		accessibleModels,
 		defaultModelAliases,
-		license as licenseStore,
 		profile,
 		responsive,
 		version,
 		appNotification as appNotificationStore
 	} from '$lib/stores';
 	import { adminConfigStore } from '$lib/stores/adminConfig.svelte';
-	import { isAgentEnabled, validateVersionUserLimit } from '$lib/utils';
+	import { isAgentEnabled } from '$lib/utils';
 	import AppNotificationBanner from './AppNotificationBanner.svelte';
 	import InfoTooltip from './InfoTooltip.svelte';
 	import SetupSplashDialog from './admin/SetupSplashDialog.svelte';
-	import CommunitySignupBanner from './admin/license/CommunitySignupBanner.svelte';
-	import LicenseViolationBanner from './admin/license/LicenseViolationBanner.svelte';
 	import GuidePanel from './guides/GuidePanel.svelte';
 	import Guide from './guides/Guides.svelte';
 	import BetaLogo from './navbar/BetaLogo.svelte';
@@ -255,11 +250,6 @@
 	let isAtLeastPowerUserPlus = $derived(profile.current.groups.includes(Group.POWERUSER_PLUS));
 
 	let hasAccessibleModels = $derived(accessibleModels.current.length > 0);
-	let hasLicenseEntitlementViolations = $derived(
-		(version.current.licenseEntitlementViolations?.length ?? 0) > 0
-	);
-	const isNearUserLimit = $derived(validateVersionUserLimit(version.current));
-
 	let defaultLinks = $derived<NavLink[]>([
 		{
 			id: 'mcp-servers',
@@ -601,13 +591,6 @@
 						collapsible: true,
 						items: [
 							{
-								id: 'license',
-								href: '/admin/license',
-								label: 'License',
-								disabled: false,
-								collapsible: false
-							},
-							{
 								id: 'branding',
 								href: '/admin/branding',
 								label: 'Branding',
@@ -697,10 +680,7 @@
 	let isBetaRoute = $derived(
 		betaRoutes.some((href) => pathname === href || pathname.startsWith(`${href}/`))
 	);
-	let logoVariant = $derived.by(() => {
-		if (version.current.enterprise) return 'enterprise' as const;
-		return 'community' as const;
-	});
+	const logoVariant = 'enterprise' as const;
 	$effect(() => {
 		if (responsive.isMobile) {
 			layout.sidebarOpen = false;
@@ -770,74 +750,6 @@
 			dismissedAt: new Date().toISOString()
 		} satisfies BannerDismissState;
 	}
-
-	const COMMUNITY_SIGNUP_BANNER_KEY = '@obot/dismiss-community-signup-banner';
-	let communitySignupBannerDismissed = localState<BannerDismissState | undefined>(
-		COMMUNITY_SIGNUP_BANNER_KEY,
-		undefined,
-		{
-			parse: (value) => {
-				if (!value) return undefined;
-				try {
-					const parsed = JSON.parse(value) as unknown;
-					if (parsed && typeof parsed === 'object') {
-						const dismissedAt = (parsed as BannerDismissState).dismissedAt;
-						return {
-							dismissedAt: typeof dismissedAt === 'string' ? dismissedAt : undefined
-						} satisfies BannerDismissState;
-					}
-					return undefined;
-				} catch {
-					return undefined;
-				}
-			}
-		}
-	);
-
-	function handleDismissCommunitySignupBanner() {
-		communitySignupBannerDismissed.current = {
-			dismissedAt: new Date().toISOString()
-		} satisfies BannerDismissState;
-	}
-
-	function isCommunitySignupDismissedForCurrentProfile() {
-		const dismissedAt = communitySignupBannerDismissed.current?.dismissedAt;
-		const dismissedDate = dismissedAt ? new Date(dismissedAt) : undefined;
-		const hasValidDismissedAt =
-			dismissedDate !== undefined && !Number.isNaN(dismissedDate.getTime());
-		if (!hasValidDismissedAt) return false;
-
-		const profileCreatedMs = profile.current.created
-			? new Date(profile.current.created).getTime()
-			: undefined;
-		if (
-			profileCreatedMs === undefined ||
-			Number.isNaN(profileCreatedMs) ||
-			profileCreatedMs < dismissedDate.getTime()
-		) {
-			return true;
-		}
-
-		return false;
-	}
-
-	const hasCommunityOrEnterpriseLicense = $derived.by(() => {
-		if (version.current.enterprise || licenseStore.current.enterprise) return true;
-		const entitlements = [
-			...(licenseStore.current.entitlements ?? []),
-			...(version.current.licenseEntitlements ?? [])
-		];
-		return (
-			entitlements.includes(COMMUNITY_ENTITLEMENT) || entitlements.includes(ENTERPRISE_ENTITLEMENT)
-		);
-	});
-
-	const canShowCommunitySignup = $derived.by(() => {
-		if (!(profile.current.hasAdminAccess?.() || profile.current.isBootstrapUser?.())) return false;
-		if (hasCommunityOrEnterpriseLicense) return false;
-		if (!communitySignupBannerDismissed.isReady) return false;
-		return !isCommunitySignupDismissedForCurrentProfile();
-	});
 
 	let showAppNotificationBanner = $derived.by(() => {
 		if (isAgentRoute) return false;
@@ -966,24 +878,11 @@
 			<div class="sticky top-0 left-0 z-50 w-full">
 				{#if banner}
 					{@render banner()}
-				{:else if hasLicenseEntitlementViolations || isNearUserLimit}
-					<LicenseViolationBanner warnUserLimit={isNearUserLimit}>
-						{#snippet fallback()}
-							{#if showAppNotificationBanner}
-								<AppNotificationBanner
-									data={appNotificationStore.current?.banner}
-									onDismiss={handleDismissBanner}
-								/>
-							{/if}
-						{/snippet}
-					</LicenseViolationBanner>
 				{:else if showAppNotificationBanner}
 					<AppNotificationBanner
 						data={appNotificationStore.current?.banner}
 						onDismiss={handleDismissBanner}
 					/>
-				{:else if canShowCommunitySignup}
-					<CommunitySignupBanner onDismiss={handleDismissCommunitySignupBanner} />
 				{/if}
 				<Navbar class={twMerge('dark:bg-base-100', classes?.navbar)} {hideProfileButton}>
 					{#snippet leftContent()}

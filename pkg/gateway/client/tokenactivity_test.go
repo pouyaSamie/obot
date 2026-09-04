@@ -8,6 +8,26 @@ import (
 	"github.com/obot-platform/obot/pkg/gateway/types"
 )
 
+func TestEffectiveTokenLimit(t *testing.T) {
+	for _, tt := range []struct {
+		name               string
+		server, user, want int
+		unlimited          bool
+	}{
+		{"inherits organization", 1000, 0, 1000, false},
+		{"custom user limit", 1000, 250, 250, false},
+		{"user unlimited", 1000, -1, 0, true},
+		{"organization unlimited", -1, 0, 0, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, unlimited := effectiveTokenLimit(tt.server, tt.user)
+			if got != tt.want || unlimited != tt.unlimited {
+				t.Fatalf("effectiveTokenLimit(%d, %d) = (%d, %t), want (%d, %t)", tt.server, tt.user, got, unlimited, tt.want, tt.unlimited)
+			}
+		})
+	}
+}
+
 // TestTokenActivityRoundTrip verifies TokenUsage persistence and aggregation.
 func TestTokenActivityRoundTrip(t *testing.T) {
 	c := newTestClient(t)

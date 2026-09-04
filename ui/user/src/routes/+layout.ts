@@ -4,7 +4,6 @@ import {
 	type AppNotification,
 	type AppPreferences,
 	type DefaultModelAlias,
-	type License,
 	type Model,
 	type Profile,
 	type Version
@@ -19,7 +18,6 @@ export const load: LayoutLoad = async ({ fetch }) => {
 	let appPreferences: AppPreferences | undefined;
 	let profile: Profile | undefined;
 	let version: Version | undefined;
-	let license: License | undefined;
 	let defaultModelAliases: DefaultModelAlias[] | undefined;
 	let models: Model[] | undefined;
 	let appNotification: AppNotification | undefined;
@@ -28,12 +26,6 @@ export const load: LayoutLoad = async ({ fetch }) => {
 		version = await UserService.getVersion({ fetch });
 	} catch {
 		version = undefined;
-	}
-
-	try {
-		license = await UserService.getLicense({ fetch });
-	} catch {
-		license = undefined;
 	}
 
 	try {
@@ -85,7 +77,6 @@ export const load: LayoutLoad = async ({ fetch }) => {
 		appPreferences,
 		profile,
 		version,
-		license,
 		defaultModelAliases,
 		models,
 		appNotification

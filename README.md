@@ -128,6 +128,28 @@ This Docker configuration mounts the host Docker socket so Obot can launch hoste
 
 See the [Installation Guide](https://docs.obot.ai/installation/overview) for Kubernetes, external PostgreSQL, encryption, authentication, and production configuration.
 
+## Running Obot locally
+
+### Without Docker
+
+Install Go 1.27 or later, then start Obot from the repository root:
+
+```bash
+go run . server --enable-authentication
+```
+
+Open [http://localhost:8080](http://localhost:8080). For persistent or production data, configure an external PostgreSQL DSN as described in the [Installation Guide](https://docs.obot.ai/installation/overview).
+
+### With Docker
+
+Build the local image and run it with a persistent data volume:
+
+```bash
+docker build --file Dockerfile.local --tag obot-local:dev .
+docker run -d --name obot-local -p 8080:8080 -v obot-local-data:/data obot-local:dev
+```
+
+Then open [http://localhost:8080](http://localhost:8080). Configure authentication providers—including LDAP—from **Admin → Auth Providers**. LDAP bind credentials are saved as encrypted provider credentials and are not Docker environment variables.
 ## Design and architecture
 
 Significant changes begin as [Obot Design Proposals](https://github.com/obot-platform/obot-design-proposals) so the architecture can be discussed before implementation. Architectural decisions that ship are recorded as concise [Architecture Decision Records](adr/README.md) in this repository.

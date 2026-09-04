@@ -8,16 +8,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/obot-platform/obot/pkg/api"
 	"github.com/obot-platform/obot/pkg/gateway/client"
-	"github.com/obot-platform/obot/pkg/license"
 	"github.com/obot-platform/obot/pkg/mcp"
-	"github.com/obot-platform/obot/pkg/storage"
 	"github.com/obot-platform/obot/pkg/upgrade"
 	"github.com/obot-platform/obot/pkg/version"
 )
@@ -33,8 +30,6 @@ type SessionStore string
 
 type VersionHandlerOptions struct {
 	GatewayClient           *client.Client
-	StorageClient           storage.Client
-	LicenseProvider         *license.Provider
 	PostgresDSN             string
 	Engine                  string
 	MCPNetworkPolicyEnabled bool
@@ -109,20 +104,10 @@ func (v *VersionHandler) getVersionResponse(ctx context.Context) (map[string]any
 		engine = mcp.RuntimeBackendKubernetes
 	}
 
-	violations, err := v.LicenseProvider.GetLicenseViolations(ctx, v.StorageClient)
-	if err != nil {
-		return nil, err
-	}
-
 	v.upgradeLock.RLock()
 	upgradeAvailable := v.upgradeAvailable
 	latestVersion := v.latestVersion
 	v.upgradeLock.RUnlock()
-
-	entitlements, err := v.LicenseProvider.Entitlements(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	userCount, err := v.GatewayClient.UserCount(ctx)
 	if err != nil {
@@ -135,40 +120,19 @@ func (v *VersionHandler) getVersionResponse(ctx context.Context) (map[string]any
 	}
 
 	values := map[string]any{
-		"upgradeAvailable":             upgradeAvailable,
-		"latestVersion":                latestVersion,
-		"obot":                         version.Get().String(),
-		"authEnabled":                  v.AuthEnabled,
-		"sessionStore":                 v.sessionStore,
-		"enterprise":                   slices.Contains(entitlements, license.EnterpriseEntitlement),
-		"community":                    slices.Contains(entitlements, license.CommunityEntitlement),
-		"licenseEntitlements":          entitlements,
-		"userCount":                    userCount,
-		"deviceCount":                  deviceCount,
-		"engine":                       engine,
-		"mcpNetworkPolicyEnabled":      v.MCPNetworkPolicyEnabled,
-		"mcpDefaultDenyAllEgress":      v.MCPDefaultDenyAllEgress,
-		"licenseEntitlementViolations": violations,
-		"missingLicenseEntitlements":   missingEntitlements(violations),
+		"upgradeAvailable":        upgradeAvailable,
+		"latestVersion":           latestVersion,
+		"obot":                    version.Get().String(),
+		"authEnabled":             v.AuthEnabled,
+		"sessionStore":            v.sessionStore,
+		"userCount":               userCount,
+		"deviceCount":             deviceCount,
+		"engine":                  engine,
+		"mcpNetworkPolicyEnabled": v.MCPNetworkPolicyEnabled,
+		"mcpDefaultDenyAllEgress": v.MCPDefaultDenyAllEgress,
 	}
 	for key, value := range v.featureValues() {
 		values[key] = value
-	}
-
-	userLimit, err := v.LicenseProvider.UserLimit(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !userLimit.Unlimited {
-		values["userLimit"] = userLimit.Maximum
-	}
-
-	deviceLimit, err := v.LicenseProvider.DeviceLimit(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !deviceLimit.Unlimited {
-		values["deviceLimit"] = deviceLimit.Maximum
 	}
 
 	if versions := os.Getenv("OBOT_SERVER_VERSIONS"); versions != "" {
@@ -193,35 +157,13 @@ func (v *VersionHandler) featureValues() map[string]bool {
 	}
 }
 
-func missingEntitlements(violations []license.Violation) []string {
-	seen := make(map[string]struct{})
-	for _, violation := range violations {
-		for _, entitlement := range violation.MissingEntitlements {
-			seen[entitlement] = struct{}{}
-		}
-	}
-	missing := make([]string, 0, len(seen))
-	for entitlement := range seen {
-		missing = append(missing, entitlement)
-	}
-	slices.Sort(missing)
-	return missing
-}
-
 func (v *VersionHandler) startUpgradeCheck(ctx context.Context, installationID, currentVersion, engine string) {
 	timer := time.NewTimer(updateCheckInterval)
 	defer timer.Stop()
 
 	var err error
 	for {
-		distribution := "oss"
-		hasValidLicense, licenseErr := v.LicenseProvider.HasValidLicense(ctx)
-		if licenseErr != nil {
-			slog.Debug("failed to refresh license state for upgrade check", "error", licenseErr)
-		} else if hasValidLicense {
-			distribution = "enterprise"
-		}
-		if err = v.checkForUpgrade(ctx, installationID, currentVersion, engine, distribution); err != nil {
+		if err = v.checkForUpgrade(ctx, installationID, currentVersion, engine, "oss"); err != nil {
 			slog.Debug("failed to check for server upgrade", "error", err)
 		}
 

@@ -1,3 +1,4 @@
 **/node_modules/
+__obot_local_build*.log
 .local/
 obot-tools/

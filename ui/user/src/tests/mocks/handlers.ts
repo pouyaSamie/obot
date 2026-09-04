@@ -18,8 +18,6 @@ export const handlers = [
 		HttpResponse.json({ items: data.listDefaultModelAliasesResponse })
 	),
 	http.get('/api/eula', () => HttpResponse.json({ accepted: true })),
-	http.get('/api/license', () => HttpResponse.json(data.getLicenseResponse)),
-	http.delete('/api/license', () => HttpResponse.json(data.getLicenseResponse)),
 	http.get('/api/mcp-capacity', () => HttpResponse.json(data.getMCPCapacityResponse)),
 	http.get('/api/setup/explicit-role-emails', () =>
 		HttpResponse.json(data.listExplicitRoleEmailsResponse)

@@ -10,7 +10,6 @@
 		type MCPCatalogServer,
 		type MCPServerInstance
 	} from '$lib/services';
-	import { MCP_CONNECTION_INVALID_LICENSE_MESSAGE } from '$lib/services/user/constants';
 	import {
 		deleteMcpServerDeployment,
 		disconnectMcpServerUser,
@@ -22,7 +21,7 @@
 		restartMcpServer,
 		supportsMCPBackendDetails
 	} from '$lib/services/user/mcp';
-	import { mcpServersAndEntries, profile, version } from '$lib/stores';
+	import { mcpServersAndEntries, profile } from '$lib/stores';
 	import { goto } from '$lib/url';
 	import CopyField from '../CopyField.svelte';
 	import DotDotDot from '../DotDotDot.svelte';
@@ -195,9 +194,6 @@
 	let canCreateAnotherMultiUserServer = $derived(
 		isMultiUserCatalogEntry(entry) && (!!catalogID || !!workspaceID) && configuredServers.length > 0
 	);
-	let hasLicenseEntitlementViolations = $derived(
-		(version.current.licenseEntitlementViolations || []).length > 0
-	);
 	let hasActions = $derived.by(() => {
 		return Boolean(
 			(entry && server && isServerOwner) ||
@@ -320,9 +316,7 @@
 					(server.catalogEntryID && server.userID === profile.current.id)))
 		)}
 		use:tooltip={{
-			text: hasLicenseEntitlementViolations
-				? MCP_CONNECTION_INVALID_LICENSE_MESSAGE
-				: isMultiUserCatalogEntryRow && !catalogID && !workspaceID
+			text: isMultiUserCatalogEntryRow && !catalogID && !workspaceID
 					? 'This is a multi-user catalog entry. An administrator must deploy it before you can connect.'
 					: canConnect
 						? ''
@@ -362,7 +356,6 @@
 			}
 		}}
 		disabled={loading ||
-			hasLicenseEntitlementViolations ||
 			(isMultiUserCatalogEntryRow && !catalogID && !workspaceID) ||
 			!canConnect ||
 			(requiresStaticOAuth && oauthConfigured === false)}
@@ -491,12 +484,7 @@
 				{/if}
 			</p>
 		{/if}
-		{#if hasLicenseEntitlementViolations}
-			<p class="mb-2 text-center text-muted-content">
-				Connection is currently disabled due to limited functionality. Resolve existing licensing
-				issues to re-enable this feature.
-			</p>
-		{:else if isMultiUserCatalogEntry(entry)}
+		{#if isMultiUserCatalogEntry(entry)}
 			<p class="mb-2 text-center">Would you like to launch a server now?</p>
 		{:else if !entry && isMultiUserServer(server)}
 			<p class="mb-2 text-center">Would you like to connect to this server now?</p>
@@ -523,7 +511,6 @@
 							server
 						});
 					}}
-					disabled={hasLicenseEntitlementViolations}
 				>
 					{#if isMultiUserCatalogEntry(entry)}
 						Launch Server

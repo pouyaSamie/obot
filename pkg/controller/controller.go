@@ -17,6 +17,7 @@ import (
 	"github.com/obot-platform/obot/pkg/controller/handlers/providerconfigurationchange"
 	"github.com/obot-platform/obot/pkg/controller/handlers/secret"
 	"github.com/obot-platform/obot/pkg/controller/handlers/tunnelpeer"
+	"github.com/obot-platform/obot/pkg/ldapauth"
 	"github.com/obot-platform/obot/pkg/localauth"
 	"github.com/obot-platform/obot/pkg/mcp"
 	"github.com/obot-platform/obot/pkg/serviceaccounts"
@@ -738,9 +739,30 @@ func (c *Controller) ensureLocalAuthProvider(ctx context.Context) error {
 	return c.services.StorageClient.Update(ctx, &existing)
 }
 
+func (c *Controller) ensureLDAPAuthProvider(ctx context.Context) error {
+	if c.services.LDAPAuthProvider == nil {
+		return nil
+	}
+	authProvider := ldapauth.AuthProvider()
+	var existing v1.AuthProvider
+	if err := c.services.StorageClient.Get(ctx, kclient.ObjectKeyFromObject(authProvider), &existing); apierrors.IsNotFound(err) {
+		return c.services.StorageClient.Create(ctx, authProvider)
+	} else if err != nil {
+		return fmt.Errorf("failed to get LDAP auth provider: %w", err)
+	}
+	if equality.Semantic.DeepEqual(existing.Spec, authProvider.Spec) {
+		return nil
+	}
+	existing.Spec = authProvider.Spec
+	return c.services.StorageClient.Update(ctx, &existing)
+}
+
 func (c *Controller) ensureAuthProvidersAndModelProviders(ctx context.Context) error {
 	if err := c.ensureLocalAuthProvider(ctx); err != nil {
 		return fmt.Errorf("failed to ensure local auth provider: %w", err)
+	}
+	if err := c.ensureLDAPAuthProvider(ctx); err != nil {
+		return fmt.Errorf("failed to ensure LDAP auth provider: %w", err)
 	}
 
 	var authProviders v1.AuthProviderList

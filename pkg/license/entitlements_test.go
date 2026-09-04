@@ -1,39 +1,24 @@
 package license
 
-import (
-	"errors"
-	"net/http"
-	"testing"
+import "testing"
 
-	keygen "github.com/keygen-sh/keygen-go/v3"
-	"github.com/obot-platform/obot/apiclient/types"
-)
-
-func TestMissingAndRequire(t *testing.T) {
-	provider := &Provider{
-		entitlements: map[keygen.EntitlementCode]struct{}{
-			"ENTITLED": {},
-		},
-	}
-
-	missing, err := provider.MissingEntitlements(t.Context(), []string{"ENTITLED", "MISSING"})
+func TestAlwaysOnEditionIsUnlimited(t *testing.T) {
+	provider, err := NewProvider(t.Context(), nil, Config{})
 	if err != nil {
-		t.Fatalf("Missing() error = %v, want nil", err)
-	}
-	if len(missing) != 1 || missing[0] != "MISSING" {
-		t.Fatalf("Missing() = %v, want [MISSING]", missing)
+		t.Fatal(err)
 	}
 
-	if err := provider.RequireEntitlements(t.Context(), []string{"ENTITLED"}); err != nil {
-		t.Fatalf("Require() error = %v, want nil", err)
+	missing, err := provider.MissingEntitlements(t.Context(), []string{"ANY_LEGACY_ENTITLEMENT"})
+	if err != nil || len(missing) != 0 {
+		t.Fatalf("MissingEntitlements() = %v, %v", missing, err)
 	}
 
-	err = provider.RequireEntitlements(t.Context(), []string{"MISSING"})
-	var httpErr *types.ErrHTTP
-	if !errors.As(err, &httpErr) {
-		t.Fatalf("Require() error = %T, want *types.ErrHTTP", err)
+	userLimit, err := provider.UserLimit(t.Context())
+	if err != nil || !userLimit.Unlimited {
+		t.Fatalf("UserLimit() = %+v, %v", userLimit, err)
 	}
-	if httpErr.Code != http.StatusPaymentRequired {
-		t.Fatalf("Require() status = %d, want %d", httpErr.Code, http.StatusPaymentRequired)
+	deviceLimit, err := provider.DeviceLimit(t.Context())
+	if err != nil || !deviceLimit.Unlimited {
+		t.Fatalf("DeviceLimit() = %+v, %v", deviceLimit, err)
 	}
 }

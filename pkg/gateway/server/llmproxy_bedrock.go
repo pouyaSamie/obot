@@ -22,6 +22,7 @@ func (s *Server) newAWSBedrockLLMProviderProxy() *llmProviderProxy {
 	return &llmProviderProxy{
 		dailyUserInputTokenLimit:  s.dailyUserInputTokenLimit,
 		dailyUserOutputTokenLimit: s.dailyUserOutputTokenLimit,
+		dailyUserTotalTokenLimit:  s.dailyUserTotalTokenLimit,
 		backend:                   bedrockMantleProviderBackend{providerName: system.AmazonBedrockModelProvider},
 		mapHelper:                 s.mapHelper,
 		messagePolicyHelper:       s.messagePolicyHelper,
@@ -32,6 +33,7 @@ func (s *Server) newAWSBedrockAPIKeyLLMProviderProxy() *llmProviderProxy {
 	return &llmProviderProxy{
 		dailyUserInputTokenLimit:  s.dailyUserInputTokenLimit,
 		dailyUserOutputTokenLimit: s.dailyUserOutputTokenLimit,
+		dailyUserTotalTokenLimit:  s.dailyUserTotalTokenLimit,
 		backend:                   bedrockMantleProviderBackend{providerName: system.AmazonBedrockAPIKeyModelProvider, apiKey: true},
 		mapHelper:                 s.mapHelper,
 		messagePolicyHelper:       s.messagePolicyHelper,

@@ -31,6 +31,7 @@ type User struct {
 	Internal               bool      `json:"internal" gorm:"default:false"`
 	DailyInputTokensLimit  int       `json:"dailyInputTokensLimit"`
 	DailyOutputTokensLimit int       `json:"dailyOutputTokensLimit"`
+	DailyTotalTokensLimit  int       `json:"dailyTotalTokensLimit"`
 	Encrypted              bool      `json:"encrypted"`
 	// Soft delete fields
 	DeletedAt        *time.Time `json:"deletedAt,omitempty"`
@@ -76,6 +77,7 @@ func ConvertUserWithEffectiveRole(u *User, roleFixed bool, authProviderName stri
 		Internal:               u.Internal,
 		DailyInputTokensLimit:  u.DailyInputTokensLimit,
 		DailyOutputTokensLimit: u.DailyOutputTokensLimit,
+		DailyTotalTokensLimit:  u.DailyTotalTokensLimit,
 		OriginalEmail:          u.OriginalEmail,
 		OriginalUsername:       u.OriginalUsername,
 	}

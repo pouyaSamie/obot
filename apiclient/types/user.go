@@ -78,6 +78,7 @@ type User struct {
 	Internal               bool     `json:"internal,omitempty"`
 	DailyInputTokensLimit  int      `json:"dailyInputTokensLimit,omitempty"`
 	DailyOutputTokensLimit int      `json:"dailyOutputTokensLimit,omitempty"`
+	DailyTotalTokensLimit  int      `json:"dailyTotalTokensLimit,omitempty"`
 	DisplayName            string   `json:"displayName,omitempty"`
 	DeletedAt              *Time    `json:"deletedAt,omitempty"`
 	OriginalEmail          string   `json:"originalEmail,omitempty"`

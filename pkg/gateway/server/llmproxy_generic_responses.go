@@ -27,6 +27,7 @@ func (s *Server) newGenericResponsesLLMProviderProxy() *llmProviderProxy {
 	return &llmProviderProxy{
 		dailyUserInputTokenLimit:  s.dailyUserInputTokenLimit,
 		dailyUserOutputTokenLimit: s.dailyUserOutputTokenLimit,
+		dailyUserTotalTokenLimit:  s.dailyUserTotalTokenLimit,
 		backend:                   genericResponsesProviderBackend{},
 		mapHelper:                 s.mapHelper,
 		messagePolicyHelper:       s.messagePolicyHelper,

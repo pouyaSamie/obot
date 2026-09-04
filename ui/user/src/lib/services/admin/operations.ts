@@ -74,6 +74,7 @@ import type {
 	TokenUsageTimeRange,
 	TotalTokenUsage,
 	TokenUsage,
+	UsageSettings,
 	SkillRepository,
 	SkillRepositoryManifest,
 	SkillAccessPolicy,
@@ -123,9 +124,6 @@ import type {
 	OAuthToken,
 	AppPreferencesManifest,
 	AppNotificationManifest,
-	License,
-	LicenseManifest,
-	CommunityLicenseEnrollment,
 	LLMAuditLog,
 	LLMAuditLogURLFilters,
 	EnforcementDecisionAllowlistCheck,
@@ -2396,6 +2394,25 @@ export async function listRemainingTokenUsageForUser(userId: string, opts?: { fe
 	return response;
 }
 
+export async function getUsageSettings(opts?: { fetch?: Fetcher }): Promise<UsageSettings> {
+	return (await doGet('/usage-settings', opts)) as UsageSettings;
+}
+
+export async function updateUsageSettings(
+	dailyUserTotalTokenLimit: number,
+	opts?: { fetch?: Fetcher }
+): Promise<UsageSettings> {
+	return (await doPut('/usage-settings', { dailyUserTotalTokenLimit }, opts)) as UsageSettings;
+}
+
+export async function updateUserDailyTotalTokenLimit(
+	userID: string,
+	dailyTotalTokensLimit: number,
+	opts?: { fetch?: Fetcher }
+): Promise<void> {
+	await doPut(`/users/${userID}/daily-total-token-limit`, { dailyTotalTokensLimit }, opts);
+}
+
 export async function listTotalTokenUsageForUser(userId: string, opts?: { fetch?: Fetcher }) {
 	const response = await doGet(`/users/${userId}/total-token-usage`, opts);
 	return response;
@@ -2472,33 +2489,6 @@ export async function listAllUserWorkspaceAccessControlRules(opts?: { fetch?: Fe
 		opts
 	)) as ItemsResponse<AccessControlRule>;
 	return response.items ?? [];
-}
-
-// License
-
-export async function deleteLicense(): Promise<void> {
-	await doDelete('/license');
-}
-
-export async function recheckLicense(opts?: {
-	fetch?: Fetcher;
-	dontLogErrors?: boolean;
-}): Promise<License> {
-	return (await doPost('/license', {}, opts)) as License;
-}
-
-export async function updateLicense(
-	manifest: LicenseManifest,
-	opts?: { fetch?: Fetcher; dontLogErrors?: boolean }
-): Promise<License> {
-	return (await doPut('/license', manifest, opts)) as License;
-}
-
-export async function createCommunityLicense(
-	enrollment: CommunityLicenseEnrollment,
-	opts?: { fetch?: Fetcher; dontLogErrors?: boolean }
-): Promise<License> {
-	return (await doPost('/license/community', enrollment, opts)) as License;
 }
 
 // MDM configurations

@@ -16,6 +16,7 @@ The Obot server is configured via environment variables. The following configura
 | `OBOT_SERVER_HOSTNAME` | Tell Obot what its server URL is so that things like OAuth, LLM proxying, and invoke URLs are handled correctly. | - |
 | `OBOT_SERVER_DAILY_USER_INPUT_TOKEN_LIMIT` | The maximum number of prompt/input tokens allowed per user per day. Set to a negative value to disable this limit. | `10000000` |
 | `OBOT_SERVER_DAILY_USER_OUTPUT_TOKEN_LIMIT` | The maximum number of completion/output tokens allowed per user per day. Set to a negative value to disable this limit. | `100000` |
+| `OBOT_SERVER_DAILY_USER_TOTAL_TOKEN_LIMIT` | Initial rolling 24-hour combined input and output token limit. A saved Admin → Token Usage value takes precedence. Set to `-1` for unlimited. | `-1` |
 | `OBOT_SERVER_IDLE_AGENT_SHUTDOWN_HOURS` | The interval in hours to check for idle agents and shut them down. Set to `-1` to disable idle shutdown. | `72` (3 days) |
 | `OBOT_SERVER_SINGLE_USER_IDLE_SERVER_SHUTDOWN_HOURS` | The interval in hours to check for idle single-user MCP servers and shut them down. Set to `-1` to disable idle shutdown. | `24` (1 day) |
 | `OBOT_SERVER_MULTI_USER_IDLE_SERVER_SHUTDOWN_HOURS` | The interval in hours to check for idle multi-user MCP servers and shut them down. Set to `-1` to disable idle shutdown. | `168` (7 days) |
@@ -87,7 +88,6 @@ The Obot server is configured via environment variables. The following configura
 | `OBOT_SERVER_FORCE_DYNAMIC_CLIENT` | Force Dynamic Client Registration when Obot authenticates to remote MCP servers, even when the authorization server supports Client ID Metadata Documents. | `false` |
 | `OBOT_SERVER_ENABLE_MESSAGE_POLICIES` | Enable Message Policies for LLM proxy content enforcement. When enabled, Obot exposes the Message Policies and Message Policy Violations admin views and evaluates configured policies on user messages and tool calls. | `false` |
 | `OBOT_SERVER_ENABLE_HOSTED_AGENTS` | Enable Hosted Agents APIs and UI. Hosted Agents are unavailable unless this is explicitly set to `true`. | `false` |
-| `OBOT_SERVER_LICENSE_KEY` | A license key for Obot Enterprise. If set via configuration, the license key cannot be updated in the UI. | - |
 | `OBOT_ENABLE_AGENTS` | Controls whether [Obot Agent](../concepts/obot-agent.md) features (agents and workflows) are available. Tri-state: `true` force-enables them regardless of existing data, `false` force-disables them even if agents already exist, and when unset Obot enables them only if the deployment already has at least one agent. New deployments therefore start with Obot Agent disabled, while existing deployments that already use agents stay enabled across upgrades with no migration required. The effective value is resolved once at server startup. | unset |
 | `OBOT_ARTIFACT_STORAGE_PROVIDER` | Storage provider for published workflows. Supported values: `s3`, `gcs`, `azure`, `custom`. If unset, Obot stores published workflows on local disk. | - |
 | `OBOT_ARTIFACT_STORAGE_BUCKET` | Bucket or container name used for published workflow storage when `OBOT_ARTIFACT_STORAGE_PROVIDER` is set. | - |

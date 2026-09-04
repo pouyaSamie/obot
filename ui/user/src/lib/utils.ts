@@ -3,8 +3,7 @@ import {
 	type OrgUser,
 	Group,
 	type DefaultModelAlias,
-	ModelAlias,
-	type Version
+	ModelAlias
 } from './services';
 import { goto } from './url';
 
@@ -356,22 +355,6 @@ export const isAgentEnabled = (defaultModelAliases?: DefaultModelAlias[]) =>
 export function isSafe<T = unknown>(value: T): value is NonNullable<T> {
 	return value !== undefined && value !== null;
 }
-
-export const validateVersionUserLimit = (version: Version): boolean => {
-	const userThreshold = 0.1; // warn when ≤10% of seats remain
-	const userLimit = version.userLimit;
-	const userCount = version.userCount ?? 0;
-
-	if (version.enterprise) {
-		return false;
-	}
-
-	if (!userLimit || userLimit <= 0) {
-		return false;
-	}
-
-	return (userLimit - userCount) / userLimit <= userThreshold;
-};
 
 function stripQuotes(value: string): string {
 	// Remove double quotes if the entire value is wrapped in them

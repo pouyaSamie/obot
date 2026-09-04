@@ -7,9 +7,7 @@
 		CircleSlash,
 		CircleCheck,
 		Construction,
-		FlaskConicalIcon,
-		TriangleAlert,
-		CircleAlert
+		FlaskConicalIcon
 	} from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 	import { twMerge } from 'tailwind-merge';
@@ -25,7 +23,6 @@
 		readonly?: boolean;
 		disableConfigure?: boolean;
 		isComingSoon?: boolean;
-		licenseKey?: string;
 	}
 
 	const {
@@ -38,13 +35,8 @@
 		deprecated,
 		readonly,
 		disableConfigure,
-		isComingSoon,
-		licenseKey
+		isComingSoon
 	}: Props = $props();
-
-	const isLicenseRequired = $derived(
-		provider.missingEntitlements && provider.missingEntitlements.length > 0
-	);
 </script>
 
 <div
@@ -100,10 +92,6 @@
 	<div
 		class={twMerge(
 			'border-base-400 rounded-md border px-2 py-1',
-			isLicenseRequired &&
-				!provider.configured &&
-				'border-transparent bg-base-200 dark:bg-base-300 text-muted-content',
-			isLicenseRequired && provider.configured && 'border-transparent bg-warning/10 text-warning'
 		)}
 	>
 		<span class="flex items-center gap-1.5 text-xs font-light">
@@ -118,13 +106,7 @@
 					Deprecated
 				</div>
 			{/if}
-			{#if isLicenseRequired}
-				{#if provider.configured}
-					<TriangleAlert class="size-4 text-warning" /> License {licenseKey ? 'Invalid' : 'Missing'}
-				{:else}
-					<CircleAlert class="size-4 text-muted-content" /> Registration Required
-				{/if}
-			{:else if provider.configured}
+			{#if provider.configured}
 				<CircleCheck class="size-4 text-success" /> Configured
 			{:else}
 				<CircleSlash class="size-4 text-error" /> Not Configured

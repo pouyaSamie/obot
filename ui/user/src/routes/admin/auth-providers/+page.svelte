@@ -7,7 +7,6 @@
 	import ProviderCard from '$lib/components/admin/ProviderCard.svelte';
 	import ProviderConfigure from '$lib/components/admin/ProviderConfigure.svelte';
 	import ProviderDeconfigureConfirm from '$lib/components/admin/ProviderDeconfigureConfirm.svelte';
-	import LicenseProviderDialog from '$lib/components/admin/license/LicenseProviderDialog.svelte';
 	import {
 		CommonAuthProviderIds,
 		PAGE_TRANSITION_DURATION,
@@ -17,7 +16,7 @@
 	import { reloadPage } from '$lib/navigation';
 	import { AdminService, UserService } from '$lib/services';
 	import type { AuthProvider } from '$lib/services/admin/types.js';
-	import { errors, license, profile, version } from '$lib/stores';
+	import { errors, profile, version } from '$lib/stores';
 	import { adminConfigStore } from '$lib/stores/adminConfig.svelte.js';
 	import { clearUrlParams } from '$lib/url';
 	import { TriangleAlert, Info } from '@lucide/svelte';
@@ -26,7 +25,6 @@
 
 	let { data } = $props();
 	let authProviders = $state(untrack(() => data.authProviders));
-	let licenseRequiredProvider = $state<AuthProvider>();
 
 	function sortAuthProviders(authProviders: AuthProvider[]) {
 		return [...authProviders].sort((a, b) => {
@@ -251,34 +249,7 @@
 		}
 	}
 
-	async function handleCommunitySubmit() {
-		if (!licenseRequiredProvider) return;
-
-		const newVersion = await UserService.getVersion();
-		version.initialize(newVersion);
-
-		authProviders = await AdminService.listAuthProviders();
-		adminConfigStore.updateAuthProviders(authProviders);
-
-		const updatedMatch = authProviders.find(
-			(provider) => provider.id === licenseRequiredProvider?.id
-		);
-
-		if (updatedMatch) {
-			handleClickConfigure(updatedMatch);
-		} else {
-			errors.append('There was an issue fetching the auth provider configuration.');
-		}
-
-		licenseRequiredProvider = undefined;
-	}
-
 	async function handleClickConfigure(authProvider: AuthProvider) {
-		if (authProvider.missingEntitlements && authProvider.missingEntitlements.length > 0) {
-			licenseRequiredProvider = authProvider;
-			return;
-		}
-
 		configuringAuthProvider = authProvider;
 		try {
 			configuringAuthProviderValues = await AdminService.revealAuthProvider(authProvider.id);
@@ -340,7 +311,6 @@
 						deconfigureAuthProviderDialog?.open();
 					}}
 					readonly={profile.current.isAdminReadonly?.()}
-					licenseKey={license.current.licenseKey}
 				/>
 			{/each}
 		</div>
@@ -472,15 +442,6 @@
 		</div>
 	</div>
 </ResponsiveDialog>
-
-<LicenseProviderDialog
-	bind:provider={licenseRequiredProvider}
-	allowSignup={!licenseRequiredProvider?.configured}
-	licenseKey={license.current.licenseKey}
-	endpoint={AdminService.createCommunityLicense}
-	onSubmit={handleCommunitySubmit}
-	signUpMessage="Register to unlock all remaining providers and to subscribe to the free Obot Community Newsletter."
-/>
 
 <svelte:head>
 	<title>Obot | Auth Providers</title>

@@ -16,7 +16,6 @@
 		type OrgUser,
 		type MCPServerInstance
 	} from '$lib/services';
-	import { MCP_CONNECTION_INVALID_LICENSE_MESSAGE } from '$lib/services/user/constants';
 	import {
 		convertEntriesAndServersToTableData,
 		disconnectMcpServerUser,
@@ -29,7 +28,7 @@
 		supportsMCPBackendDetails
 	} from '$lib/services/user/mcp';
 	import { isMcpTunnelDisconnected } from '$lib/services/user/mcpTunnel';
-	import { mcpServersAndEntries, mcpTunnelConnections, profile, version } from '$lib/stores';
+	import { mcpServersAndEntries, mcpTunnelConnections, profile } from '$lib/stores';
 	import { openUrl } from '$lib/utils';
 	import EditExistingDeployment from '../../lib/components/mcp/EditExistingDeployment.svelte';
 	import { CircleFadingArrowUp, Server } from '@lucide/svelte';
@@ -114,10 +113,6 @@
 			? sorted.filter((d) => d.name.toLowerCase().includes(query.toLowerCase()))
 			: sorted;
 	});
-
-	let hasLicenseEntitlementViolations = $derived(
-		(version.current.licenseEntitlementViolations || []).length > 0
-	);
 
 	function getConfiguredServersForCatalogEntry(entry: MCPCatalogEntry): MCPCatalogServer[] {
 		return mcpServersAndEntries.current.userConfiguredServers.filter(
@@ -322,17 +317,9 @@
 						{stripMarkdownToText(d.data.manifest.description ?? '')}
 					</p>
 				</div>
-				<div
-					use:tooltip={{
-						text: hasLicenseEntitlementViolations
-							? MCP_CONNECTION_INVALID_LICENSE_MESSAGE
-							: undefined
-					}}
-					id={`btn-connect-to-server-${d.id}`}
-				>
+				<div id={`btn-connect-to-server-${d.id}`}>
 					<button
 						class="btn btn-sm btn-primary border-none"
-						disabled={hasLicenseEntitlementViolations}
 						onclick={(e) => {
 							e.stopPropagation();
 							handleConnect(d.data);

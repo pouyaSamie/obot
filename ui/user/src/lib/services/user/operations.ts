@@ -5,7 +5,6 @@ import { Group } from '$lib/services/admin/types';
 import { buildQueryString } from '$lib/url';
 import type {
 	AuthProvider,
-	License,
 	MCPCatalogEntry,
 	MCPCatalogEntryServerManifest,
 	MCPCatalogServerManifest,
@@ -1362,12 +1361,6 @@ export async function fetchWorkspaceIDForProfile(
 		throw new HttpError(404, 'Workspace not found.');
 	}
 	return workspaceID;
-}
-
-// License
-
-export async function getLicense(opts?: { fetch?: Fetcher }): Promise<License> {
-	return (await doGet('/license', opts)) as License;
 }
 
 // Skills

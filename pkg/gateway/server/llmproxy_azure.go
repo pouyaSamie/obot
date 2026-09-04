@@ -21,6 +21,7 @@ func (s *Server) newAzureLLMProviderProxy(providerName string) *llmProviderProxy
 	return &llmProviderProxy{
 		dailyUserInputTokenLimit:  s.dailyUserInputTokenLimit,
 		dailyUserOutputTokenLimit: s.dailyUserOutputTokenLimit,
+		dailyUserTotalTokenLimit:  s.dailyUserTotalTokenLimit,
 		backend:                   &azureProviderBackend{providerName: providerName},
 		mapHelper:                 s.mapHelper,
 		messagePolicyHelper:       s.messagePolicyHelper,

@@ -13,7 +13,6 @@
 		mcpTunnelConnections,
 		defaultModelAliases,
 		userDeviceSettings,
-		license,
 		accessibleModels,
 		appNotification
 	} from '$lib/stores';
@@ -55,8 +54,6 @@
 		if (data.appNotification) {
 			appNotification.initialize(data.appNotification);
 		}
-
-		license.initialize(data.license);
 
 		if (data.defaultModelAliases) {
 			untrack(() => defaultModelAliases.initialize(data.defaultModelAliases));

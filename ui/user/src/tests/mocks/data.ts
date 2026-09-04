@@ -28,6 +28,7 @@ export const getAppNotificationResponse = {
 // App preferences
 
 export const listAppPreferencesResponse = {
+	appName: 'Obot',
 	logos: {
 		darkLogoChat: '/user/images/obot-chat-logo-blue-white-text.svg',
 		darkLogoCommunity: '/user/images/obot-community-logo-blue-white-text.svg',
@@ -269,16 +270,6 @@ export const initiateTempLoginResponse = {
 	redirectUrl: 'https://example.com/temp-login',
 	tokenId: 'temp-login-token'
 };
-
-// License
-
-export const getLicenseResponse = {
-	entitlements: null,
-	enterprise: false,
-	licenseKey: '',
-	locked: false,
-	source: ''
-} satisfies Awaited<ReturnType<typeof UserService.getLicense>>;
 
 // MCP servers
 
@@ -568,16 +559,12 @@ export const getVersionResponse = {
 	agentsEnabled: true,
 	authEnabled: true,
 	engine: 'docker',
-	enterprise: false,
 	hideK8sDetails: false,
 	hostedAgentsEnabled: true,
 	latestVersion: 'v0.0.0-dev',
-	licenseEntitlementViolations: undefined,
-	licenseEntitlements: undefined,
 	mcpDefaultDenyAllEgress: false,
 	mcpNetworkPolicyEnabled: false,
 	messagePoliciesEnabled: false,
-	missingLicenseEntitlements: [],
 	obot: 'v0.0.0-dev',
 	sessionStore: 'cookie',
 	upgradeAvailable: false

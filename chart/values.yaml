@@ -106,6 +106,7 @@ secret:
   # secret.ANTHROPIC_API_KEY -- An Anthropic API Key used to configure access to Anthropic models, which can be used as the default in Obot.
   ANTHROPIC_API_KEY: ""
 
+
   # secret.OBOT_SERVER_OTEL_BEARER_TOKEN -- The bearer token for authentication with OpenTelemetry
   OBOT_SERVER_OTEL_BEARER_TOKEN: ""
 
@@ -118,8 +119,6 @@ secret:
   # secret.OBOT_ARTIFACT_AZURE_CLIENT_SECRET -- Azure client secret for published workflow storage when using explicit Azure credentials.
   OBOT_ARTIFACT_AZURE_CLIENT_SECRET: ""
 
-  # secret.OBOT_SERVER_LICENSE_KEY -- A license key for Obot Enterprise. If set here, it cannot be set in the UI.
-  OBOT_SERVER_LICENSE_KEY: ""
 
 # config - Non-sensitive configuration variables for the Obot deployment. These values are converted to a ConfigMap and used via envFrom.
 config:
@@ -183,6 +182,9 @@ config:
   OBOT_SERVER_DAILY_USER_INPUT_TOKEN_LIMIT: ""
   # config.OBOT_SERVER_DAILY_USER_OUTPUT_TOKEN_LIMIT -- The maximum number of completion/output tokens allowed per user per day. Set to a negative value to disable this limit. Defaults to 100000.
   OBOT_SERVER_DAILY_USER_OUTPUT_TOKEN_LIMIT: ""
+  # config.OBOT_SERVER_DAILY_USER_TOTAL_TOKEN_LIMIT -- Initial combined input+output limit until an admin saves a value in Token Usage. -1 is unlimited.
+  OBOT_SERVER_DAILY_USER_TOTAL_TOKEN_LIMIT: "-1"
+
 
   # config.OBOT_SERVER_IDLE_AGENT_SHUTDOWN_HOURS -- The interval in hours to check for idle agents and shut them down. Set to -1 to disable. Defaults to 72.
   OBOT_SERVER_IDLE_AGENT_SHUTDOWN_HOURS: ""
@@ -318,6 +320,25 @@ extraVolumes: []
 
 # extraVolumeMounts -- A list of additional volume mounts to create
 extraVolumeMounts: []
+
+# rag -- Optional externally built read-only retrieval MCP servers. Obot does not
+# implement retrieval; enabling this deploys one MCP endpoint per collection.
+# The image must expose search_documents and get_document over Streamable HTTP
+# at /mcp and enforce RAG_ALLOWED_GROUPS for every document it returns.
+rag:
+  enabled: false
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: IfNotPresent
+  servicePort: 8080
+  collections:
+    - name: engineering
+      allowedGroups: "ldap/engineering"
+    - name: finance
+      allowedGroups: "ldap/finance"
+    - name: general
+      allowedGroups: "ldap/general"
 
 serviceAccount:
   # serviceAccount.create - Specifies whether a service account should be created

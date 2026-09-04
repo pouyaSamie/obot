@@ -42,6 +42,7 @@ import (
 	"github.com/obot-platform/obot/pkg/hostedagentaccessrule"
 	"github.com/obot-platform/obot/pkg/imagepullsecrets"
 	"github.com/obot-platform/obot/pkg/jwt/persistent"
+	"github.com/obot-platform/obot/pkg/ldapauth"
 	"github.com/obot-platform/obot/pkg/license"
 	"github.com/obot-platform/obot/pkg/localauth"
 	"github.com/obot-platform/obot/pkg/logutil"
@@ -87,18 +88,18 @@ type (
 	RateLimiterConfig ratelimiter.Options
 	EncryptionConfig  encryption.Options
 	MCPConfig         mcp.Options
-	LicenseConfig     license.Config
 )
 
 type Config struct {
-	HTTPListenPort       int      `usage:"HTTP port to listen on" default:"8080" name:"http-listen-port"`
-	AllowedOrigin        string   `usage:"Allowed origin for CORS"`
-	ProviderRegistries   []string `usage:"Local filesystem paths to provider registries (directories) to load providers from"`
-	EnableAuthentication bool     `usage:"Enable authentication" default:"false"`
-	AuthAdminEmails      []string `usage:"Emails of admin users"`
-	AuthOwnerEmails      []string `usage:"Emails of owner users"`
-	TunnelPeerID         string   `usage:"Unique Pod UID of this Obot replica for tunnel peering"`
-	TunnelPeerToken      string   `usage:"Shared internal credential for tunnel peering"`
+	HTTPListenPort         int      `usage:"HTTP port to listen on" default:"8080" name:"http-listen-port"`
+	AllowedOrigin          string   `usage:"Allowed origin for CORS"`
+	ProviderRegistries     []string `usage:"Local filesystem paths to provider registries (directories) to load providers from"`
+	EnableAuthentication   bool     `usage:"Enable authentication" default:"false"`
+	AuthAdminEmails        []string `usage:"Emails of admin users"`
+	AuthOwnerEmails        []string `usage:"Emails of owner users"`
+
+	TunnelPeerID           string   `usage:"Unique Pod UID of this Obot replica for tunnel peering"`
+	TunnelPeerToken        string   `usage:"Shared internal credential for tunnel peering"`
 
 	MCPOAuthClientExpiration       string   `usage:"The expiration time in dynamically registered MCP OAuth clients, must be a valid duration string and may include days, hours, or minutes" default:"30d"`
 	MCPOAuthClientNativeExceptions []string `usage:"Additional Client ID Metadata Document URLs that default to the native application type when application_type is omitted"`
@@ -164,7 +165,6 @@ type Config struct {
 	AuditConfig
 	RateLimiterConfig
 	MCPConfig
-	LicenseConfig
 	storageservices.Config
 }
 
@@ -201,6 +201,7 @@ type Services struct {
 	GatewayServer                 *gserver.Server
 	Bootstrapper                  *bootstrap.Bootstrap
 	LocalAuthProvider             *localauth.Provider
+	LDAPAuthProvider              *ldapauth.Provider
 	AuthEnabled                   bool
 	DefaultMCPCatalogPath         string
 	DefaultSystemMCPCatalogPath   string
@@ -286,7 +287,7 @@ type Services struct {
 	ArtifactBlobStore  blob.BlobStore
 	ArtifactBlobBucket string
 
-	// License provider
+	// Always-on edition policy retained for legacy provider and limit wiring.
 	LicenseProvider *license.Provider
 }
 
@@ -1038,9 +1039,9 @@ func New(ctx context.Context, config Config) (*Services, error) {
 		return nil, err
 	}
 
-	licenseProvider, err := license.NewProvider(ctx, gatewayClient, license.Config(config.LicenseConfig))
+	licenseProvider, err := license.NewProvider(ctx, gatewayClient, license.Config{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create license provider: %w", err)
+		return nil, fmt.Errorf("failed to create edition policy: %w", err)
 	}
 
 	providerDispatcher := dispatcher.New(mcpSessionManager, storageClient, gatewayClient, licenseProvider, config.Hostname, fmt.Sprintf("http://localhost:%d", config.HTTPListenPort), postgresDSN)
@@ -1070,6 +1071,7 @@ func New(ctx context.Context, config Config) (*Services, error) {
 
 	authenticators := gserver.NewGatewayTokenReviewer(gatewayClient, providerDispatcher)
 	var localAuthProvider *localauth.Provider
+	var ldapAuthProvider *ldapauth.Provider
 	if config.EnableAuthentication {
 		proxyManager = proxy.NewProxyManager(providerDispatcher)
 
@@ -1085,6 +1087,26 @@ func New(ctx context.Context, config Config) (*Services, error) {
 			return nil, err
 		}
 		providerDispatcher.RegisterBuiltinAuthProvider(system.DefaultNamespace, localauth.ProviderName, localAuthProviderURL)
+
+		ldapAuthProvider, err = ldapauth.New(config.Hostname, func(ctx context.Context) (ldapauth.Config, error) {
+			credential, err := gatewayClient.RevealCredential(ctx, []string{ldapauth.ProviderName, system.GenericAuthProviderCredentialContext}, ldapauth.ProviderName)
+			if err != nil {
+				var notFound client.CredentialNotFoundError
+				if errors.As(err, &notFound) {
+					return ldapauth.Config{}, nil
+				}
+				return ldapauth.Config{}, fmt.Errorf("load LDAP configuration: %w", err)
+			}
+			return ldapauth.ConfigFromValues(credential.Secrets), nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		ldapAuthProviderURL, err := ldapAuthProvider.Start(ctx)
+		if err != nil {
+			return nil, err
+		}
+		providerDispatcher.RegisterBuiltinAuthProvider(system.DefaultNamespace, ldapauth.ProviderName, ldapAuthProviderURL)
 
 		// Token Auth + OAuth auth
 		authenticators = union.NewFailOnError(authenticators, proxyManager)
@@ -1288,7 +1310,6 @@ func New(ctx context.Context, config Config) (*Services, error) {
 			config.Hostname,
 			oauthServerConfig.ScopesSupported,
 			registryNoAuth,
-			licenseProvider,
 		),
 		GatewayClient:                gatewayClient,
 		ProxyManager:                 proxyManager,
@@ -1312,6 +1333,7 @@ func New(ctx context.Context, config Config) (*Services, error) {
 		AuthEnabled:                  config.EnableAuthentication,
 		Bootstrapper:                 bootstrapper,
 		LocalAuthProvider:            localAuthProvider,
+		LDAPAuthProvider:             ldapAuthProvider,
 
 		DefaultMCPCatalogPath:          config.DefaultMCPCatalogPath,
 		MDMAssetSource:                 config.MDMAssetSource,

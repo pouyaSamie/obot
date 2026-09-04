@@ -41,6 +41,12 @@ type RemainingTokenUsage struct {
 	UserID                string `json:"userID,omitempty"`
 	InputTokens           int    `json:"inputTokens"`
 	OutputTokens          int    `json:"outputTokens"`
+	TotalTokens           int    `json:"totalTokens"`
 	UnlimitedInputTokens  bool   `json:"unlimitedInputTokens"`
 	UnlimitedOutputTokens bool   `json:"unlimitedOutputTokens"`
+	UnlimitedTotalTokens  bool   `json:"unlimitedTotalTokens"`
+}
+
+type UsageSettings struct {
+	DailyUserTotalTokenLimit int `json:"dailyUserTotalTokenLimit"`
 }

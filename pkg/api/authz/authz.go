@@ -62,10 +62,6 @@ var (
 		"GET /debug/pprof/",
 		"GET /debug/triggers",
 		"GET /debug/metrics",
-		"PUT /api/license",
-		"POST /api/license",
-		"POST /api/license/community",
-		"DELETE /api/license",
 		"/api/auth-providers",
 		"/api/auth-providers/",
 		"/api/local-auth/users",
@@ -108,6 +104,8 @@ var (
 		"GET /api/active-users",
 		"GET /api/token-usage",
 		"GET /api/total-token-usage",
+		"/api/usage-settings",
+		"PUT /api/users/{user_id}/daily-total-token-limit",
 		"GET /api/tokens",
 		"DELETE /api/tokens/{id}",
 		"/api/oauth-apps",
@@ -326,7 +324,6 @@ var (
 			"POST /api/logout-all",
 			"GET /api/version",
 			"GET /api/default-k8s-settings",
-			"GET /api/license",
 			"GET /api/setup/oauth-complete",
 
 			// Users should be able to get the connected tunnel information

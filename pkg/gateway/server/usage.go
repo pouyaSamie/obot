@@ -54,7 +54,7 @@ func (s *Server) totalUsageForUser(apiContext api.Context) error {
 
 func (s *Server) remainingUsageForUser(apiContext api.Context) error {
 	userID := apiContext.PathValue("user_id")
-	remainingUsage, err := apiContext.GatewayClient.RemainingTokenUsageForUser(apiContext.Context(), userID, tokenUsageTimePeriod, s.dailyUserInputTokenLimit, s.dailyUserOutputTokenLimit)
+	remainingUsage, err := apiContext.GatewayClient.RemainingTokenUsageForUser(apiContext.Context(), userID, tokenUsageTimePeriod, s.dailyUserInputTokenLimit, s.dailyUserOutputTokenLimit, s.dailyUserTotalTokenLimit)
 	if err != nil {
 		return err
 	}

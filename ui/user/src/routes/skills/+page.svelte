@@ -10,14 +10,10 @@
 	import { sanitizeFilenameSegment, saveBlob } from '$lib/download';
 	import { UserService } from '$lib/services';
 	import type { Skill } from '$lib/services/nanobot/types';
-	import {
-		AiClient,
-		COMMON_AI_CLIENTS_MAP,
-		MCP_CONNECTION_INVALID_LICENSE_MESSAGE
-	} from '$lib/services/user/constants';
+	import { AiClient, COMMON_AI_CLIENTS_MAP } from '$lib/services/user/constants';
 	import { formatTimeAgo } from '$lib/time';
 	import { setUrlParamAndUpdateUrl } from '$lib/url.js';
-	import { TriangleAlert, PencilRuler, Bot, Download } from '@lucide/svelte';
+	import { PencilRuler, Bot, Download } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 	import { twMerge } from 'tailwind-merge';
 
@@ -127,15 +123,7 @@
 
 {#snippet skillsView()}
 	<div class="flex flex-col gap-2">
-		{#if data?.showLicenseError}
-			<div class="my-12 flex w-md flex-col items-center gap-4 self-center text-center">
-				<TriangleAlert class="size-12 text-warning" />
-				<h4 class="text-muted-content text-lg font-semibold">Limited Functionality</h4>
-				<p class="text-muted-content text-sm font-light">
-					{MCP_CONNECTION_INVALID_LICENSE_MESSAGE}
-				</p>
-			</div>
-		{:else if skills.length > 0}
+		{#if skills.length > 0}
 			<Table
 				data={skillsTableData}
 				fields={['displayName', 'description', 'created']}

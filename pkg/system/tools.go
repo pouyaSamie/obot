@@ -12,6 +12,7 @@ const (
 	// LocalAuthProvider is the built-in username/password auth provider, implemented in
 	// pkg/localauth. It runs in-process instead of as a daemon from the provider registry.
 	LocalAuthProvider = "local-auth-provider"
+	LDAPAuthProvider  = "ldap-auth-provider"
 
 	// BootstrapName is the reserved name used for the bootstrap user and auth provider.
 	BootstrapName = "bootstrap"

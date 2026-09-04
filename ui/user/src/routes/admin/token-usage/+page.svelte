@@ -94,6 +94,9 @@
 
 	let totalTokensData = $state<TotalTokenUsage>();
 	let data = $state<TokenUsage[]>([]);
+	let dailyTotalTokenLimit = $state(-1);
+	let configuredDailyTotalTokenLimit = $state(-1);
+	let savingDailyTotalTokenLimit = $state(false);
 	const selectedTargetModels = $derived.by(() => {
 		const ids = selectedModelIds.filter((id) => id !== ALL_MODELS);
 		if (ids.length === 0) return null;
@@ -146,7 +149,28 @@
 	onMount(async () => {
 		usersData = await UserService.listUsersIncludeDeleted();
 		modelsData = await AdminService.listModels({ all: true });
+		try {
+			configuredDailyTotalTokenLimit = await AdminService.getUsageSettings().then(
+				(settings) => settings.dailyUserTotalTokenLimit
+			);
+			dailyTotalTokenLimit = configuredDailyTotalTokenLimit;
+		} catch (error) {
+			errors.append(error);
+		}
 	});
+
+	async function saveDailyTotalTokenLimit() {
+		if (dailyTotalTokenLimit === 0) return;
+		savingDailyTotalTokenLimit = true;
+		try {
+			const settings = await AdminService.updateUsageSettings(dailyTotalTokenLimit);
+			configuredDailyTotalTokenLimit = settings.dailyUserTotalTokenLimit;
+		} catch (error) {
+			errors.append(error);
+		} finally {
+			savingDailyTotalTokenLimit = false;
+		}
+	}
 
 	let fetchAbortController: AbortController | null = null;
 
@@ -707,6 +731,24 @@
 	{/if}
 
 	<div class="mb-4 flex flex-col gap-4" transition:fade={{ duration }}>
+		<div class="m-auto w-full max-w-(--breakpoint-xl) px-4 md:px-8">
+			<section class="bg-base-200 flex flex-col gap-3 rounded-lg p-4 md:flex-row md:items-end">
+				<div class="grow">
+					<h4 class="font-semibold">Daily combined token limit</h4>
+					<p class="text-muted-content text-sm">Applies across input and output tokens in the rolling 24-hour window.</p>
+				</div>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="radio" name="daily-token-limit-mode" checked={dailyTotalTokenLimit < 0} onchange={() => (dailyTotalTokenLimit = -1)} /> Unlimited
+				</label>
+				<label class="flex items-center gap-2 text-sm">
+					<input type="radio" name="daily-token-limit-mode" checked={dailyTotalTokenLimit > 0} onchange={() => { if (dailyTotalTokenLimit < 1) dailyTotalTokenLimit = 1000000; }} /> Limited
+				</label>
+				<input class="input input-sm w-40" type="number" min="1" disabled={dailyTotalTokenLimit < 0} bind:value={dailyTotalTokenLimit} aria-label="Daily combined token limit" />
+				<button class="btn btn-primary btn-sm" disabled={savingDailyTotalTokenLimit || dailyTotalTokenLimit === 0 || dailyTotalTokenLimit === configuredDailyTotalTokenLimit} onclick={saveDailyTotalTokenLimit}>
+					{savingDailyTotalTokenLimit ? 'Saving…' : 'Save'}
+				</button>
+			</section>
+		</div>
 		<div class="bg-base-300 dark:bg-base-200 w-full">
 			<div class="m-auto w-full px-4 py-4 md:max-w-(--breakpoint-xl) md:px-8">
 				<h4 class="font-semibold">Overall Stats</h4>

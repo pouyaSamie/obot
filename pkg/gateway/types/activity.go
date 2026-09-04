@@ -57,8 +57,10 @@ type TokenUsage struct {
 type RemainingTokenUsage struct {
 	InputTokens           int
 	OutputTokens          int
+	TotalTokens           int
 	UnlimitedInputTokens  bool
 	UnlimitedOutputTokens bool
+	UnlimitedTotalTokens  bool
 }
 
 func ConvertAPIActivity(a APIActivity) types2.APIActivity {
@@ -91,7 +93,8 @@ func ConvertTokenActivity(a RunTokenActivity) types2.TokenUsage {
 
 func (r RemainingTokenUsage) IsDepleted() bool {
 	return !r.UnlimitedInputTokens && r.InputTokens <= 0 ||
-		!r.UnlimitedOutputTokens && r.OutputTokens <= 0
+		!r.UnlimitedOutputTokens && r.OutputTokens <= 0 ||
+		!r.UnlimitedTotalTokens && r.TotalTokens <= 0
 }
 
 func ConvertRemainingTokenUsage(userID string, r *RemainingTokenUsage) types2.RemainingTokenUsage {
@@ -99,7 +102,9 @@ func ConvertRemainingTokenUsage(userID string, r *RemainingTokenUsage) types2.Re
 		UserID:                userID,
 		InputTokens:           r.InputTokens,
 		OutputTokens:          r.OutputTokens,
+		TotalTokens:           r.TotalTokens,
 		UnlimitedInputTokens:  r.UnlimitedInputTokens,
 		UnlimitedOutputTokens: r.UnlimitedOutputTokens,
+		UnlimitedTotalTokens:  r.UnlimitedTotalTokens,
 	}
 }

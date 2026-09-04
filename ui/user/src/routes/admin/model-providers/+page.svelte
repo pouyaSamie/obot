@@ -4,17 +4,12 @@
 	import ListModels from '$lib/components/admin/ListModels.svelte';
 	import ProviderCard from '$lib/components/admin/ProviderCard.svelte';
 	import ProviderConfigure from '$lib/components/admin/ProviderConfigure.svelte';
-	import LicenseProviderDialog from '$lib/components/admin/license/LicenseProviderDialog.svelte';
 	import { CommonModelProviderIds, PAGE_TRANSITION_DURATION } from '$lib/constants';
 	import { getAdminModels, initModels } from '$lib/context/admin/models.svelte.js';
 	import { HttpError } from '$lib/errors.js';
 	import { AdminService, type ModelProvider as ModelProviderType } from '$lib/services';
 	import { sortModelProviders } from '$lib/sort.js';
-	import {
-		accessibleModels,
-		defaultModelAliases as defaultModelAliasesStore,
-		license
-	} from '$lib/stores';
+	import { accessibleModels, defaultModelAliases as defaultModelAliasesStore } from '$lib/stores';
 	import { profile, version } from '$lib/stores';
 	import { adminConfigStore } from '$lib/stores/adminConfig.svelte.js';
 	import { delay } from '$lib/utils';
@@ -40,7 +35,6 @@
 	let configuringModelProviderValues = $state<Record<string, string>>();
 	let configureError = $state<string>();
 	let loading = $state(false);
-	let licenseRequiredProvider = $state<ModelProviderType>();
 
 	let atLeastOneConfigured = $derived(modelProviders.some((provider) => provider.configured));
 	let hasAnthropicAwsBedrockConfigured = $derived(
@@ -172,11 +166,6 @@
 					provider={modelProvider}
 					deprecated={modelProvider.id === CommonModelProviderIds.ANTHROPIC_BEDROCK}
 					onConfigure={async () => {
-						if (modelProvider.missingEntitlements && modelProvider.missingEntitlements.length > 0) {
-							licenseRequiredProvider = modelProvider;
-							return;
-						}
-
 						configuringModelProvider = modelProvider;
 						try {
 							configuringModelProviderValues = await AdminService.revealModelProvider(
@@ -197,7 +186,6 @@
 						accessibleModels.refresh();
 					}}
 					readonly={isAdminReadonly}
-					licenseKey={license.current.licenseKey}
 				>
 					{#snippet configuredActions(provider)}
 						<ListModels provider={provider as ModelProviderType} readonly={isAdminReadonly} />
@@ -233,11 +221,6 @@
 		{/if}
 	{/snippet}
 </ProviderConfigure>
-
-<LicenseProviderDialog
-	bind:provider={licenseRequiredProvider}
-	licenseKey={license.current.licenseKey}
-/>
 
 <svelte:head>
 	<title>Obot | Model Providers</title>

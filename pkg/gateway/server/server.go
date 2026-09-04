@@ -15,6 +15,7 @@ type Options struct {
 
 	DailyUserInputTokenLimit  int `usage:"The maximum number of daily user input tokens to allow, < 0 disables the limit" default:"10000000"` // default is 10 million
 	DailyUserOutputTokenLimit int `usage:"The maximum number of daily user output tokens to allow, < 0 disables the limit" default:"100000"`  // default is 100 thousand
+	DailyUserTotalTokenLimit  int `usage:"The maximum combined daily user tokens to allow, < 0 disables the limit" default:"-1" env:"OBOT_SERVER_DAILY_USER_TOTAL_TOKEN_LIMIT"`
 }
 
 type Server struct {
@@ -27,6 +28,7 @@ type Server struct {
 	messagePolicyHelper       *messagepolicy.Helper
 	dailyUserInputTokenLimit  int
 	dailyUserOutputTokenLimit int
+	dailyUserTotalTokenLimit  int
 }
 
 func New(db *db.DB, tokenService *persistent.TokenService, modelProviderDispatcher *dispatcher.Dispatcher, acrHelper *accesscontrolrule.Helper, mapHelper *modelaccesspolicy.Helper, messagePolicyHelper *messagepolicy.Helper, opts Options) (*Server, error) {
@@ -41,6 +43,7 @@ func New(db *db.DB, tokenService *persistent.TokenService, modelProviderDispatch
 		messagePolicyHelper:       messagePolicyHelper,
 		dailyUserInputTokenLimit:  opts.DailyUserInputTokenLimit,
 		dailyUserOutputTokenLimit: opts.DailyUserOutputTokenLimit,
+		dailyUserTotalTokenLimit:  opts.DailyUserTotalTokenLimit,
 	}
 
 	return s, nil

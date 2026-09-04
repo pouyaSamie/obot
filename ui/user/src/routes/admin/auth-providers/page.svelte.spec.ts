@@ -26,6 +26,28 @@ const googleConfigured: AuthProvider = {
 	configured: true,
 	missingConfigurationParameters: []
 };
+const ldapProvider: AuthProvider = {
+	id: 'ldap-auth-provider',
+	name: 'LDAP',
+	icon: '/user/images/obot-icon-blue.svg',
+	requiredConfigurationParameters: [
+		{ name: 'OBOT_LDAP_URL', friendlyName: 'LDAP URL' },
+		{ name: 'OBOT_LDAP_BIND_DN', friendlyName: 'Bind DN' },
+		{ name: 'OBOT_LDAP_BIND_PASSWORD', friendlyName: 'Bind Password', sensitive: true },
+		{ name: 'OBOT_LDAP_USER_BASE_DN', friendlyName: 'User Base DN' }
+	],
+	optionalConfigurationParameters: [
+		{ name: 'OBOT_LDAP_START_TLS', friendlyName: 'Use StartTLS' }
+	],
+	configured: false,
+	missingConfigurationParameters: [
+		'OBOT_LDAP_URL',
+		'OBOT_LDAP_BIND_DN',
+		'OBOT_LDAP_BIND_PASSWORD',
+		'OBOT_LDAP_USER_BASE_DN'
+	],
+	namespace: 'default'
+};
 
 function providerCard(name: string) {
 	return page.getByRole('heading', { name, exact: true }).locator('..');
@@ -138,15 +160,42 @@ describe('Auth Providers Page', () => {
 		});
 	});
 
-	describe('license required auth provider', () => {
-		it('offers Obot Community signup in the license dialog on Configure', async () => {
+	describe('provider configuration', () => {
+		it('configures LDAP from the Auth Providers page', async () => {
+			const configuredLDAP = { ...ldapProvider, configured: true, missingConfigurationParameters: [] };
+			const configureLDAP = vi.fn(async ({ request }) => {
+				expect(await request.json()).toMatchObject({
+					OBOT_LDAP_URL: 'ldaps://ldap.example.com:636',
+					OBOT_LDAP_BIND_DN: 'CN=obot,DC=example,DC=com',
+					OBOT_LDAP_BIND_PASSWORD: 'bind-password',
+					OBOT_LDAP_USER_BASE_DN: 'OU=People,DC=example,DC=com',
+					OBOT_LDAP_START_TLS: 'true'
+				});
+				return new HttpResponse(null, { status: 204 });
+			});
+			worker.use(
+				http.post('/api/auth-providers/ldap-auth-provider/reveal', () => new HttpResponse(null, { status: 404 })),
+				http.post('/api/auth-providers/ldap-auth-provider/configure', configureLDAP),
+				http.get('/api/auth-providers', () => HttpResponse.json({ items: [configuredLDAP] }))
+			);
+			await renderAuthProvidersPage({ authProviders: [ldapProvider] });
+
+			await providerCard('LDAP').getByRole('button', { name: 'Configure', exact: true }).click();
+			const dialog = page.getByRole('dialog');
+			await dialog.getByLabelText('LDAP URL', { exact: true }).fill('ldaps://ldap.example.com:636');
+			await dialog.getByLabelText('Bind DN', { exact: true }).fill('CN=obot,DC=example,DC=com');
+			await dialog.getByLabelText('Bind Password', { exact: true }).fill('bind-password');
+			await dialog.getByLabelText('User Base DN', { exact: true }).fill('OU=People,DC=example,DC=com');
+			await dialog.getByLabelText('Use StartTLS', { exact: true }).click();
+			await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
+
+			await vi.waitFor(() => expect(configureLDAP).toHaveBeenCalledOnce());
+			await expect.element(providerCard('LDAP').getByText('Configured', { exact: true })).toBeVisible();
+		});
+		it('opens the configuration dialog even when legacy entitlement metadata is present', async () => {
 			await renderAuthProvidersPage({ authProviders: [entraProvider] });
 
-			await expect
-				.element(
-					providerCard('Microsoft Entra').getByText('Registration Required', { exact: true })
-				)
-				.toBeVisible();
+			await expect.element(providerCard('Microsoft Entra').getByText('Not Configured', { exact: true })).toBeVisible();
 
 			await providerCard('Microsoft Entra')
 				.getByRole('button', { name: 'Configure', exact: true })
@@ -155,28 +204,7 @@ describe('Auth Providers Page', () => {
 			await expect
 				.element(page.getByRole('heading', { name: 'Microsoft Entra', exact: true }).first())
 				.toBeVisible();
-			await expect
-				.element(page.getByRole('heading', { name: 'Get Access Now!', exact: true }))
-				.toBeVisible();
-			await expect
-				.element(
-					page.getByText(
-						/Register to unlock all remaining providers and to subscribe to the free Obot Community Newsletter/,
-						{
-							exact: false
-						}
-					)
-				)
-				.toBeVisible();
-			await expect.element(page.getByLabelText('Name', { exact: true })).toBeVisible();
-			await expect.element(page.getByLabelText('Email', { exact: true })).toBeVisible();
-			await expect.element(page.getByLabelText('Company', { exact: false })).toBeVisible();
-			await expect
-				.element(page.getByRole('button', { name: 'Register', exact: true }))
-				.toBeVisible();
-			await expect
-				.element(page.getByText('Set Up Microsoft Entra', { exact: true }))
-				.not.toBeInTheDocument();
+			await expect.element(page.getByText('Set Up Microsoft Entra', { exact: true })).toBeVisible();
 		});
 	});
 });

@@ -21,7 +21,6 @@ import (
 	"github.com/obot-platform/obot/pkg/api/server/requestinfo"
 	"github.com/obot-platform/obot/pkg/auth"
 	gclient "github.com/obot-platform/obot/pkg/gateway/client"
-	"github.com/obot-platform/obot/pkg/license"
 	"github.com/obot-platform/obot/pkg/proxy"
 	"github.com/obot-platform/obot/pkg/storage"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -31,19 +30,18 @@ import (
 )
 
 type Server struct {
-	storageClient           storage.Client
-	gatewayClient           *gclient.Client
-	localK8sClient          kclient.Client
-	obotNamespace           string
-	authenticator           *authn.Authenticator
-	authorizer              *authz.Authorizer
-	proxyManager            *proxy.Manager
-	auditLogger             audit.Logger
-	rateLimiter             *ratelimiter.RateLimiter
-	baseURL                 string
-	mcpOAuthScope           string
-	registryNoAuth          bool
-	providerEntitlementGate *license.ProviderEntitlementGate
+	storageClient  storage.Client
+	gatewayClient  *gclient.Client
+	localK8sClient kclient.Client
+	obotNamespace  string
+	authenticator  *authn.Authenticator
+	authorizer     *authz.Authorizer
+	proxyManager   *proxy.Manager
+	auditLogger    audit.Logger
+	rateLimiter    *ratelimiter.RateLimiter
+	baseURL        string
+	mcpOAuthScope  string
+	registryNoAuth bool
 
 	mux         *http.ServeMux
 	otelHandler http.Handler
@@ -60,26 +58,25 @@ type responseWriter struct {
 	auditLogger audit.Logger
 }
 
-func NewServer(storageClient storage.Client, gatewayClient *gclient.Client, localK8sClient kclient.Client, obotNamespace string, authn *authn.Authenticator, authz *authz.Authorizer, proxyManager *proxy.Manager, auditLogger audit.Logger, rateLimiter *ratelimiter.RateLimiter, baseURL string, oauthScopesSupported []string, registryNoAuth bool, licenseProvider *license.Provider) *Server {
+func NewServer(storageClient storage.Client, gatewayClient *gclient.Client, localK8sClient kclient.Client, obotNamespace string, authn *authn.Authenticator, authz *authz.Authorizer, proxyManager *proxy.Manager, auditLogger audit.Logger, rateLimiter *ratelimiter.RateLimiter, baseURL string, oauthScopesSupported []string, registryNoAuth bool) *Server {
 	var scope string
 	if len(oauthScopesSupported) > 0 {
 		scope = fmt.Sprintf(", scope=\"%s\"", strings.Join(oauthScopesSupported, " "))
 	}
 	s := &Server{
-		storageClient:           storageClient,
-		gatewayClient:           gatewayClient,
-		localK8sClient:          localK8sClient,
-		obotNamespace:           obotNamespace,
-		authenticator:           authn,
-		authorizer:              authz,
-		proxyManager:            proxyManager,
-		baseURL:                 baseURL + "/api",
-		mcpOAuthScope:           scope,
-		auditLogger:             auditLogger,
-		rateLimiter:             rateLimiter,
-		registryNoAuth:          registryNoAuth,
-		mux:                     http.NewServeMux(),
-		providerEntitlementGate: license.NewProviderEntitlementGate(licenseProvider, storageClient),
+		storageClient:  storageClient,
+		gatewayClient:  gatewayClient,
+		localK8sClient: localK8sClient,
+		obotNamespace:  obotNamespace,
+		authenticator:  authn,
+		authorizer:     authz,
+		proxyManager:   proxyManager,
+		baseURL:        baseURL + "/api",
+		mcpOAuthScope:  scope,
+		auditLogger:    auditLogger,
+		rateLimiter:    rateLimiter,
+		registryNoAuth: registryNoAuth,
+		mux:            http.NewServeMux(),
 	}
 	s.otelHandler = otelhttp.NewHandler(
 		s.mux,
@@ -118,6 +115,13 @@ func (s *Server) Wrap(f api.HandlerFunc) http.HandlerFunc {
 		// This wrapper is intentionally applied early so it covers authn/authz
 		// errors, registry endpoints, UI, static, and proxy responses.
 		rw = &headersResponseWriter{ResponseWriter: rw}
+
+		// Licensing endpoints were removed from this distribution. Return 404 before
+		// authentication so retired public paths never present an authorization flow.
+		if strings.HasPrefix(req.URL.Path, "/api/license") {
+			http.NotFound(rw, req)
+			return
+		}
 
 		user, err := s.authenticator.Authenticate(req)
 		if err != nil {
@@ -192,51 +196,48 @@ func (s *Server) Wrap(f api.HandlerFunc) http.HandlerFunc {
 		}
 
 		var shouldLogError bool
-		err = s.providerEntitlementGate.Check(req)
-		if err == nil {
-			if !s.authorizer.Authorize(req, user) {
-				if _, err := req.Cookie(auth.ObotAccessTokenCookie); err == nil && req.URL.Path == "/api/me" {
-					// Tell the browser to delete the obot_access_token cookie.
-					// If the user tried to access this path and was unauthorized, then something is wrong with their token.
-					http.SetCookie(rw, &http.Cookie{
-						Name:   auth.ObotAccessTokenCookie,
-						Value:  "",
-						Path:   "/",
-						MaxAge: -1,
-					})
-				}
-
-				// Only set WWW-Authenticate if not in no-auth mode
-				if strings.HasPrefix(req.URL.Path, "/v0.1") && !s.registryNoAuth {
-					rw.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="MCP Registry", resource_metadata="%s/.well-known/oauth-protected-resource/v0.1/servers"`, strings.TrimSuffix(s.baseURL, "/api")))
-				}
-
-				if authenticated {
-					http.Error(rw, "forbidden", http.StatusForbidden)
-				} else {
-					http.Error(rw, "unauthorized", http.StatusUnauthorized)
-				}
-
-				return
+		if !s.authorizer.Authorize(req, user) {
+			if _, err := req.Cookie(auth.ObotAccessTokenCookie); err == nil && req.URL.Path == "/api/me" {
+				// Tell the browser to delete the obot_access_token cookie.
+				// If the user tried to access this path and was unauthorized, then something is wrong with their token.
+				http.SetCookie(rw, &http.Cookie{
+					Name:   auth.ObotAccessTokenCookie,
+					Value:  "",
+					Path:   "/",
+					MaxAge: -1,
+				})
 			}
 
-			if strings.HasPrefix(req.URL.Path, "/api/") {
-				rw.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
-				rw.Header().Set("Pragma", "no-cache")
-				rw.Header().Set("Expires", "0")
+			// Only set WWW-Authenticate if not in no-auth mode
+			if strings.HasPrefix(req.URL.Path, "/v0.1") && !s.registryNoAuth {
+				rw.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="MCP Registry", resource_metadata="%s/.well-known/oauth-protected-resource/v0.1/servers"`, strings.TrimSuffix(s.baseURL, "/api")))
 			}
 
-			err = f(api.Context{
-				ResponseWriter: rw,
-				Request:        req,
-				Storage:        s.storageClient,
-				GatewayClient:  s.gatewayClient,
-				User:           user,
-				APIBaseURL:     s.baseURL,
-				LocalK8sClient: s.localK8sClient,
-				ObotNamespace:  s.obotNamespace,
-			})
+			if authenticated {
+				http.Error(rw, "forbidden", http.StatusForbidden)
+			} else {
+				http.Error(rw, "unauthorized", http.StatusUnauthorized)
+			}
+
+			return
 		}
+
+		if strings.HasPrefix(req.URL.Path, "/api/") {
+			rw.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
+			rw.Header().Set("Pragma", "no-cache")
+			rw.Header().Set("Expires", "0")
+		}
+
+		err = f(api.Context{
+			ResponseWriter: rw,
+			Request:        req,
+			Storage:        s.storageClient,
+			GatewayClient:  s.gatewayClient,
+			User:           user,
+			APIBaseURL:     s.baseURL,
+			LocalK8sClient: s.localK8sClient,
+			ObotNamespace:  s.obotNamespace,
+		})
 		if errHTTP := (*types.ErrHTTP)(nil); errors.As(err, &errHTTP) {
 			http.Error(rw, errHTTP.Message, errHTTP.Code)
 			shouldLogError = errHTTP.Code == http.StatusInternalServerError

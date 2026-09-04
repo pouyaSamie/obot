@@ -240,6 +240,7 @@ func (d *Dispatcher) GetConfiguredAuthProvider(ctx context.Context) (string, err
 // We need to check this way instead of using the status fields to avoid race conditions with the controller.
 // Returns: isConfigured (bool)
 func (d *Dispatcher) isAuthProviderConfigured(ctx context.Context, authProvider v1.AuthProvider) bool {
+
 	credEnv, err := CredentialEnvForAuthProvider(ctx, d.gatewayClient, authProvider)
 	if err != nil {
 		return false

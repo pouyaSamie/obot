@@ -316,6 +316,20 @@ func (c *Client) UpdateUserInternalStatus(ctx context.Context, userID string, in
 	return c.db.WithContext(ctx).Model(new(types.User)).Where("id = ? AND deleted_at IS NULL", userID).Update("internal", internal).Error
 }
 
+// UpdateDailyTotalTokensLimit updates only the quota override so role/profile
+// updates cannot accidentally reset it. 0 inherits the organization limit;
+// a negative value is unlimited.
+func (c *Client) UpdateDailyTotalTokensLimit(ctx context.Context, userID string, limit int) error {
+	result := c.db.WithContext(ctx).Model(new(types.User)).Where("id = ? AND deleted_at IS NULL", userID).Update("daily_total_tokens_limit", limit)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 func (c *Client) UpdateProfileIfNeeded(ctx context.Context, user *types.User, authProviderName, authProviderNamespace, authProviderURL string) error {
 	if authProviderName == "" || authProviderNamespace == "" || authProviderURL == "" {
 		return nil

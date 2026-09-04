@@ -2,12 +2,19 @@ package client
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strconv"
 	"time"
 
 	types2 "github.com/obot-platform/obot/apiclient/types"
 	"github.com/obot-platform/obot/pkg/gateway/types"
 	"gorm.io/gorm"
 )
+
+// DailyUserTotalTokenLimitPropertyKey is written only after an administrator
+// saves the organization-wide combined limit.
+const DailyUserTotalTokenLimitPropertyKey = "daily_user_total_token_limit"
 
 func (c *Client) InsertTokenUsage(ctx context.Context, activity *types.RunTokenActivity) error {
 	return c.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -50,7 +57,7 @@ func (c *Client) TokenUsageSeriesInRange(ctx context.Context, start, end time.Ti
 	return activities, err
 }
 
-func (c *Client) RemainingTokenUsageForUser(ctx context.Context, userID string, period time.Duration, inputTokenLimit, outputTokenLimit int) (*types.RemainingTokenUsage, error) {
+func (c *Client) RemainingTokenUsageForUser(ctx context.Context, userID string, period time.Duration, inputTokenLimit, outputTokenLimit, fallbackTotalTokenLimit int) (*types.RemainingTokenUsage, error) {
 	r := &types.RemainingTokenUsage{}
 
 	user, err := c.UserByID(ctx, userID)
@@ -62,22 +69,31 @@ func (c *Client) RemainingTokenUsageForUser(ctx context.Context, userID string, 
 		// Admins always have unlimited tokens.
 		r.UnlimitedInputTokens = true
 		r.UnlimitedOutputTokens = true
+		r.UnlimitedTotalTokens = true
 		return r, nil
+	}
+
+	organizationTotalLimit, err := c.DailyUserTotalTokenLimit(ctx, fallbackTotalTokenLimit)
+	if err != nil {
+		return nil, err
 	}
 
 	// Resolve the effective per-dimension limit, folding in the per-user setting: a positive
 	// per-user limit overrides the server limit, 0 inherits it, and a negative one disables it.
 	inputLimit, inputUnlimited := effectiveTokenLimit(inputTokenLimit, user.DailyInputTokensLimit)
 	outputLimit, outputUnlimited := effectiveTokenLimit(outputTokenLimit, user.DailyOutputTokensLimit)
+	totalLimit, totalUnlimited := effectiveTokenLimit(organizationTotalLimit, user.DailyTotalTokensLimit)
 	r.UnlimitedInputTokens = inputUnlimited
 	r.UnlimitedOutputTokens = outputUnlimited
-	if inputUnlimited && outputUnlimited {
+	r.UnlimitedTotalTokens = totalUnlimited
+	if inputUnlimited && outputUnlimited && totalUnlimited {
 		return r, nil
 	}
 
 	// Seed with the full limit so a user with no usage this period sees their whole budget.
 	r.InputTokens = inputLimit
 	r.OutputTokens = outputLimit
+	r.TotalTokens = totalLimit
 
 	end := time.Now()
 	activity, err := c.tokenUsageByUser(ctx, userID, end.Add(-period), end)
@@ -89,8 +105,26 @@ func (c *Client) RemainingTokenUsageForUser(ctx context.Context, userID string, 
 	// (only meaningful for limited dimensions; ignore it when the Unlimited flag is set).
 	r.InputTokens = inputLimit - activity[0].Usage.InputTokens
 	r.OutputTokens = outputLimit - activity[0].Usage.OutputTokens
+	r.TotalTokens = totalLimit - activity[0].Usage.TotalTokens
 
 	return r, nil
+}
+
+// DailyUserTotalTokenLimit gets the persisted organization setting. Before an
+// administrator has saved it, the deployment-managed fallback is used.
+func (c *Client) DailyUserTotalTokenLimit(ctx context.Context, fallback int) (int, error) {
+	p, err := c.GetProperty(ctx, DailyUserTotalTokenLimitPropertyKey)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return fallback, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	limit, err := strconv.Atoi(p.Value)
+	if err != nil || limit == 0 {
+		return 0, fmt.Errorf("invalid saved daily total token limit")
+	}
+	return limit, nil
 }
 
 // effectiveTokenLimit resolves one dimension's daily token limit. A positive per-user limit

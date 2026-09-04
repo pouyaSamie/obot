@@ -1,4 +1,4 @@
-import { handleRouteError, HttpError } from '$lib/errors';
+import { handleRouteError } from '$lib/errors';
 import { AdminService } from '$lib/services';
 import type { GitCredential, SkillRepository } from '$lib/services/admin/types';
 import type { Skill } from '$lib/services/nanobot/types';
@@ -9,7 +9,6 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 	let skillRepositories: SkillRepository[] = [];
 	let skills: Skill[] = [];
 	let gitCredentials: GitCredential[] = [];
-	let showLicenseError = false;
 
 	const viewParam = url.searchParams.get('view');
 	const isSkillsView = (viewParam ?? 'urls') !== 'urls';
@@ -27,19 +26,13 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 		try {
 			skills = await AdminService.listAllSkills({ fetch, dontLogErrors: true });
 		} catch (err) {
-			if (err instanceof HttpError && err.statusCode === 402) {
-				skills = [];
-				showLicenseError = true;
-			} else {
-				handleRouteError(err, '/admin/skills', profile);
-			}
+			handleRouteError(err, '/admin/skills', profile);
 		}
 	}
 
 	return {
 		skillRepositories,
 		gitCredentials,
-		skills,
-		showLicenseError
+		skills
 	};
 };

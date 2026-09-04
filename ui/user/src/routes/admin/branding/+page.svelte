@@ -468,22 +468,18 @@
 					class="absolute top-1/2 left-1/2 flex w-md -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-4"
 				>
 					<Logo class="h-16" />
-					<h1 class="text-2xl font-semibold">Welcome to Obot</h1>
+					<h1 class="text-2xl font-semibold">Workspace owner access</h1>
 					<p class="text-md text-muted-content mb-1 text-center font-light">
-						Log in or create your account to continue
+						Owners can manage branding without connecting an external account.
 					</p>
 
 					<div
 						class="dark:border-base-400 dark:bg-base-200 bg-base-100 flex w-sm flex-col gap-4 rounded-xl border border-transparent p-4 shadow-sm"
 					>
-						<button class="btn btn-secondary w-full">
-							<img
-								class="h-6 w-6 rounded-full bg-base-100 p-1 dark:bg-gray-600"
-								src="/user/images/github-mark/github-mark.svg"
-								alt="Github"
-							/>
-							<span class="text-center text-sm font-light">Continue with Github</span>
-						</button>
+						<div class="flex items-center justify-center gap-2 text-sm font-light text-muted-content">
+							<span class="size-2 rounded-full bg-success" aria-hidden="true"></span>
+							Owner permissions enabled
+						</div>
 					</div>
 				</div>
 			</div>
@@ -759,6 +755,21 @@
 {/snippet}
 
 {#snippet logosConfiguration()}
+	<div class="flex flex-col gap-2 p-4">
+		<label class="text-sm font-medium" for="app-name">Header name</label>
+		<input
+			id="app-name"
+			class="input input-sm w-full"
+			maxlength="60"
+			value={form.appName}
+			oninput={(e) => {
+				const newForm = { ...form, appName: e.currentTarget.value };
+				form = newForm;
+				appPreferences.current = compileAppPreferences(newForm);
+			}}
+		/>
+		<p class="text-xs text-muted-content">Shown beside the default logo in the application header.</p>
+	</div>
 	{#each standardIconFields as field (field.id)}
 		<div class="flex flex-col gap-2 p-4 relative">
 			<p class="text-sm font-medium">{field.label}</p>

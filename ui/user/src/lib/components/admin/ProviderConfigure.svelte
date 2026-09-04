@@ -242,7 +242,11 @@
 		'OBOT_AZURE_OPENAI_MODEL_PROVIDER_DEPLOYMENTS'
 	]);
 
-	const booleanInputs = new Set(['OBOT_AUTH_PROVIDER_ENABLE_LOGGING']);
+	const booleanInputs = new Set([
+	'OBOT_AUTH_PROVIDER_ENABLE_LOGGING',
+	'OBOT_LDAP_START_TLS',
+	'OBOT_LDAP_INSECURE_SKIP_VERIFY'
+]);
 </script>
 
 {#snippet booleanToggle(parameter: ProviderParameter)}

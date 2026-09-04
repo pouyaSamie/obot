@@ -6,14 +6,12 @@
 	import Layout from '$lib/components/Layout.svelte';
 	import ResponsiveDialog from '$lib/components/ResponsiveDialog.svelte';
 	import Search from '$lib/components/Search.svelte';
-	import UserLimitNotice from '$lib/components/admin/license/UserLimitNotice.svelte';
 	import Table from '$lib/components/table/Table.svelte';
 	import { PAGE_TRANSITION_DURATION } from '$lib/constants';
-	import { COMMUNITY_ENTITLEMENT } from '$lib/constants';
 	import Loading from '$lib/icons/Loading.svelte';
 	import { AdminService, UserService, Group, Role, type OrgUser } from '$lib/services';
 	import { userRoleOptions } from '$lib/services/admin/constants';
-	import { profile, version } from '$lib/stores';
+	import { profile } from '$lib/stores';
 	import { formatTimeAgo } from '$lib/time';
 	import { replaceState } from '$lib/url';
 	import {
@@ -23,7 +21,7 @@
 		setSortUrlParams,
 		setFilterUrlParams
 	} from '$lib/url.js';
-	import { getUserRoleLabel, validateVersionUserLimit } from '$lib/utils';
+	import { getUserRoleLabel } from '$lib/utils';
 	import { Handshake, Info, ShieldAlert } from '@lucide/svelte';
 	import { debounce } from 'es-toolkit';
 	import { untrack } from 'svelte';
@@ -57,7 +55,11 @@
 	type TableItem = (typeof tableData)[0];
 
 	let updateRoleDialog = $state<ReturnType<typeof ResponsiveDialog>>();
+	let quotaDialog = $state<ReturnType<typeof ResponsiveDialog>>();
 	let updatingRole = $state<TableItem>();
+	let updatingQuota = $state<TableItem>();
+	let quotaMode = $state<'default' | 'custom' | 'unlimited'>('default');
+	let customQuota = $state(1000000);
 	let deletingUser = $state<TableItem>();
 	let confirmHandoffToUser = $state<TableItem>();
 	let confirmAuditorAdditionToUser = $state<TableItem>();
@@ -72,7 +74,6 @@
 		{ label: 'Basic User', id: Role.BASIC }
 	]);
 	let isAdminReadonly = $derived(profile.current.isAdminReadonly?.());
-	const isNearUserLimit = $derived(validateVersionUserLimit(version.current));
 
 	function closeUpdateRoleDialog() {
 		updateRoleDialog?.close();
@@ -109,6 +110,31 @@
 			roleUpdateError = getErrorMessage(error);
 			updateRoleDialog?.open();
 			return false;
+		} finally {
+			loading = false;
+		}
+	}
+
+	function openQuotaDialog(user: TableItem) {
+		updatingQuota = user;
+		if ((user.dailyTotalTokensLimit ?? 0) < 0) quotaMode = 'unlimited';
+		else if ((user.dailyTotalTokensLimit ?? 0) > 0) {
+			quotaMode = 'custom';
+			customQuota = user.dailyTotalTokensLimit ?? 1000000;
+		} else quotaMode = 'default';
+		quotaDialog?.open();
+	}
+
+	async function saveQuota() {
+		if (!updatingQuota || (quotaMode === 'custom' && customQuota < 1)) return;
+		loading = true;
+		try {
+			const limit = quotaMode === 'default' ? 0 : quotaMode === 'unlimited' ? -1 : customQuota;
+			await AdminService.updateUserDailyTotalTokenLimit(updatingQuota.id, limit);
+			users = await UserService.listUsers();
+			updatingQuota = undefined;
+		} catch (error) {
+			roleUpdateError = getErrorMessage(error);
 		} finally {
 			loading = false;
 		}
@@ -170,11 +196,6 @@
 		)
 	);
 
-	const hasValidLicense = $derived(Boolean(version.current.enterprise));
-	const isCommunityEdition = $derived(
-		version.current.licenseEntitlements?.includes(COMMUNITY_ENTITLEMENT) ?? false
-	);
-
 	// Auto-clear user impersonation when base role is not Admin or Owner
 	$effect(() => {
 		if (updatingRole && updatingRole.roleId !== Role.ADMIN && updatingRole.roleId !== Role.OWNER) {
@@ -187,20 +208,6 @@
 	<div class="mb-4" in:fade={{ duration }} out:fade={{ duration }}>
 		<div class="flex flex-col gap-8">
 			<div class="flex flex-col gap-2">
-				{#if isNearUserLimit}
-					<UserLimitNotice />
-				{/if}
-
-				{#if version.current.userLimit}
-					<section class="flex items-center justify-end gap-2 text-muted-content">
-						<p class="text-sm">User Limits:</p>
-						{#if !hasValidLicense || isCommunityEdition}
-							<p class="text-sm">{version.current.userCount} / {version.current.userLimit}</p>
-						{:else}
-							<p class="text-sm text-muted-content">-</p>
-						{/if}
-					</section>
-				{/if}
 				<Search
 					value={query}
 					class="dark:bg-base-200 dark:border-base-400 bg-base-100 border border-transparent shadow-sm"
@@ -264,6 +271,7 @@
 								>
 									Update Role
 								</button>
+								<button class="menu-button" onclick={() => openQuotaDialog(d)}>Token Limit</button>
 								<button
 									class="menu-button text-error"
 									disabled={d.explicitRole ||
@@ -427,6 +435,26 @@
 					Update
 				{/if}
 			</button>
+		</div>
+	{/if}
+</ResponsiveDialog>
+
+<ResponsiveDialog
+	class="w-full overflow-visible p-4 md:max-w-xl"
+	title={`Token limit for ${updatingQuota?.name ?? ''}`}
+	bind:this={quotaDialog}
+	onClose={() => (updatingQuota = undefined)}
+>
+	{#if updatingQuota}
+		<div class="flex flex-col gap-4 p-4 text-sm">
+			<p class="text-muted-content">The combined limit applies to input plus output tokens in a rolling 24-hour window. Admin users remain unlimited.</p>
+			<label class="flex gap-3"><input type="radio" value="default" bind:group={quotaMode} /> <span><b>Use organization default</b><br />Inherit the limit configured on Token Usage.</span></label>
+			<label class="flex gap-3"><input type="radio" value="custom" bind:group={quotaMode} /> <span><b>Custom limit</b><br /><input class="input input-sm mt-2 w-48" type="number" min="1" disabled={quotaMode !== 'custom'} bind:value={customQuota} /> tokens</span></label>
+			<label class="flex gap-3"><input type="radio" value="unlimited" bind:group={quotaMode} /> <span><b>Unlimited</b><br />Disable only this user's combined limit.</span></label>
+		</div>
+		<div class="mt-4 flex justify-end gap-2 p-4 md:p-0">
+			<button class="btn btn-secondary" onclick={() => (updatingQuota = undefined)}>Cancel</button>
+			<button class="btn btn-primary" disabled={loading || (quotaMode === 'custom' && customQuota < 1)} onclick={saveQuota}>Save</button>
 		</div>
 	{/if}
 </ResponsiveDialog>

@@ -1,0 +1,39 @@
+# Local development image. It intentionally avoids the production provider and
+# PostgreSQL image stages so a developer can run Obot on Docker Desktop.
+# The builder digest is pinned so Docker Desktop can use its existing BuildKit
+# cache without contacting Docker Hub for a mutable tag.
+ARG PROVIDERS_IMAGE=ghcr.io/obot-platform/providers:latest
+
+FROM docker.arvancloud.ir/library/golang:1.27-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS build
+RUN apk add --no-cache build-base git make nodejs npm
+WORKDIR /app
+COPY . .
+# The default npm registry is unreachable from this Docker Desktop instance.
+# This mirror can be overridden at build time with --build-arg NPM_REGISTRY=.
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+ARG GO_PROXY=https://goproxy.cn,direct
+RUN --mount=type=cache,id=obot-npm,target=/root/.npm \
+    --mount=type=cache,id=obot-pnpm,target=/root/.local/share/pnpm/store \
+    npm install --global pnpm@11.7.0 --registry=$NPM_REGISTRY && \
+    pnpm config set registry $NPM_REGISTRY && \
+    cd ui/user && pnpm install && pnpm run build
+RUN --mount=type=cache,id=obot-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=obot-go-build,target=/root/.cache/go-build \
+    GOSUMDB=off GOPROXY=$GO_PROXY make build
+
+FROM ${PROVIDERS_IMAGE} AS providers
+
+FROM docker.arvancloud.ir/library/alpine:3.20
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=build /app/bin/obot /usr/local/bin/obot
+COPY --from=build /app/ui/user/build /app/ui/user/build
+# The provider manifests and executables are distributed in the provider
+# bundle. Without this directory the server has no providers to register.
+COPY --from=providers /obot-providers /obot-providers
+ENV OBOT_DEV_MODE=false
+ENV OBOT_SERVER_ENABLE_AUTHENTICATION=true
+ENV OBOT_SERVER_ENABLE_REGISTRY_AUTH=true
+ENV OBOT_SERVER_PROVIDER_REGISTRIES=/obot-providers/providers
+EXPOSE 8080
+ENTRYPOINT ["obot", "server"]

@@ -5,7 +5,6 @@ import {
 	appNotification,
 	appPreferences,
 	defaultModelAliases,
-	license as licenseStore,
 	profile,
 	userDeviceSettings,
 	version
@@ -14,7 +13,6 @@ import { compileAppPreferences } from '$lib/stores/appPreferences.svelte';
 import type { LayoutData } from '../../routes/$types';
 import {
 	getAppNotificationResponse,
-	getLicenseResponse,
 	getProfileResponse,
 	getVersionResponse,
 	listAppPreferencesResponse,
@@ -47,8 +45,6 @@ export function createMockProfile(groups: string[] = [Group.ADMIN]): Profile {
  *
  * @example
  * ```ts
- * const data = createPageData<PageData>({ license: mockLicense });
- * render(LicensePage, { data });
  * ```
  */
 export function createPageData<T = LayoutData>(overrides: PageDataOverrides = {}): T {
@@ -56,7 +52,6 @@ export function createPageData<T = LayoutData>(overrides: PageDataOverrides = {}
 		appPreferences: compileAppPreferences(listAppPreferencesResponse),
 		profile: createMockProfile(),
 		version: getVersionResponse,
-		license: getLicenseResponse,
 		defaultModelAliases: listDefaultModelAliasesResponse,
 		models: listModelsResponse,
 		appNotification: getAppNotificationResponse,
@@ -83,8 +78,6 @@ export async function initializePageStores(data: LayoutData) {
 		await appNotification.initialize(data.appNotification);
 	}
 
-	licenseStore.initialize(data.license);
-
 	if (data.defaultModelAliases) {
 		await defaultModelAliases.initialize(data.defaultModelAliases);
 	}
@@ -100,10 +93,9 @@ export async function initializePageStores(data: LayoutData) {
  * @example
  * ```ts
  * const data = await preparePageData<PageData>({
- *   license: { ...getLicenseResponse, licenseKey: 'key' },
- *   version: { ...getVersionResponse, userCount: 90, userLimit: 100 }
+ *   version: { ...getVersionResponse, userCount: 90 }
  * });
- * render(LicensePage, { data });
+ * render(Page, { data });
  * ```
  */
 export async function preparePageData<T = LayoutData>(

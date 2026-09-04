@@ -68,7 +68,6 @@
 	let skills = $state<Skill[]>(untrack(() => data?.skills ?? []));
 	let skillRepositories = $state<SkillRepository[]>(untrack(() => data.skillRepositories));
 	let gitCredentials = $state<GitCredential[]>(untrack(() => data.gitCredentials ?? []));
-	let showLicenseError = $state(untrack(() => data?.showLicenseError ?? false));
 
 	$effect(() => {
 		skillRepositories = data.skillRepositories;
@@ -231,11 +230,7 @@
 						syncing.delete(id);
 					}
 				} catch (err) {
-					if (err instanceof HttpError && err.statusCode === 402) {
-						showLicenseError = true;
-					} else {
-						errors.append(`Failed to sync skill repository: ${err}`);
-					}
+					errors.append(`Failed to sync skill repository: ${err}`);
 					clearSyncInterval(id);
 					syncing.delete(id);
 				}
@@ -437,16 +432,6 @@
 					</a>
 				{/snippet}
 			</Table>
-		{:else if showLicenseError}
-			<div class="my-12 flex w-md flex-col items-center gap-4 self-center text-center">
-				<TriangleAlert class="size-12 text-warning" />
-				<h4 class="text-muted-content text-lg font-semibold">License Error</h4>
-				<p class="text-muted-content text-sm font-light">
-					An issue occurred with fetching skills due to licensing. Please resolve outstanding
-					licensing issues or contact support at
-					<a href="mailto:info@obot.ai" class="text-link">info@obot.ai</a>.
-				</p>
-			</div>
 		{:else}
 			<div class="my-12 flex w-md flex-col items-center gap-4 self-center text-center">
 				<PencilRuler class="text-base-content/80 size-24" />
@@ -625,11 +610,7 @@
 				skills = await AdminService.listAllSkills();
 			}
 		} catch (error) {
-			if (error instanceof HttpError && error.statusCode === 402) {
-				showLicenseError = true;
-			} else {
-				errors.append(`Failed to delete Git Source URLs: ${error}`);
-			}
+			errors.append(`Failed to delete Git Source URLs: ${error}`);
 		} finally {
 			deletingSources = undefined;
 			deleting = false;

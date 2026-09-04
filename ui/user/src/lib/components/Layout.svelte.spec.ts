@@ -1,13 +1,7 @@
-import {
-	COMMUNITY_ENTITLEMENT,
-	COMMUNITY_SIGNUP_BANNER_COPY,
-	ENTERPRISE_ENTITLEMENT
-} from '$lib/constants';
 import { Group } from '$lib/services';
-import type { License } from '$lib/services/admin/types';
 import type { Profile, Version } from '$lib/services/user/types';
-import { defaultModelAliases, license as licenseStore, profile, version } from '$lib/stores';
-import { getLicenseResponse, getProfileResponse, getVersionResponse } from '../../tests/mocks/data';
+import { defaultModelAliases, profile, version } from '$lib/stores';
+import { getProfileResponse, getVersionResponse } from '../../tests/mocks/data';
 import Layout from './Layout.svelte';
 import { createRawSnippet, tick } from 'svelte';
 import { describe, expect, it } from 'vitest';
@@ -22,7 +16,7 @@ const adminSections = [
 	{ id: 'device-management', href: '/admin/devices' },
 	{ id: 'user-management', href: '/admin/users' },
 	{ id: 'llm-gateway', href: '/admin/token-usage' },
-	{ id: 'app-management', href: '/admin/license' }
+	{ id: 'app-management', href: '/admin/branding' }
 ];
 
 const adminSectionLabels = [
@@ -54,7 +48,6 @@ const adminSharedLinks = [
 	'/admin/llm-audit-logs',
 	'/admin/model-providers',
 	'/admin/model-access-policies',
-	'/admin/license',
 	'/admin/branding',
 	'/admin/app-notification'
 ];
@@ -76,7 +69,6 @@ function createProfile(groups: string[]): Profile {
 async function renderLayout(
 	groups: string[] = [],
 	versionOverrides: Partial<Version> = {},
-	licenseOverrides: Partial<License> = {},
 	profileOverrides: Partial<Profile> = {}
 ) {
 	profile.initialize({
@@ -88,10 +80,6 @@ async function renderLayout(
 		agentsEnabled: false,
 		engine: 'docker',
 		...versionOverrides
-	});
-	licenseStore.initialize({
-		...getLicenseResponse,
-		...licenseOverrides
 	});
 	await defaultModelAliases.initialize([]);
 
@@ -256,95 +244,6 @@ describe('Layout.svelte', () => {
 				await openAdvancedPane('Administration');
 				await expectAdminSections();
 			});
-		});
-	});
-
-	describe('community signup banner', () => {
-		const copy = COMMUNITY_SIGNUP_BANNER_COPY;
-
-		it('shows for administrators without a community or enterprise license', async () => {
-			await renderLayout([Group.ADMIN]);
-
-			await expect.element(page.getByText(copy, { exact: true })).toBeVisible();
-			const register = page.getByRole('link', { name: 'Register', exact: true });
-			await expect.element(register).toBeVisible();
-			await expect.element(register).toHaveAttribute('href', '/admin/license');
-		});
-
-		it('does not show for basic users', async () => {
-			await renderLayout([Group.USER]);
-
-			await expect.element(page.getByText(copy, { exact: true })).not.toBeInTheDocument();
-		});
-
-		it('does not show when a community license is present', async () => {
-			await renderLayout(
-				[Group.ADMIN],
-				{},
-				{
-					licenseKey: 'community-license-key',
-					enterprise: true,
-					entitlements: [COMMUNITY_ENTITLEMENT]
-				}
-			);
-
-			await expect.element(page.getByText(copy, { exact: true })).not.toBeInTheDocument();
-		});
-
-		it('does not show when an enterprise license is present', async () => {
-			await renderLayout(
-				[Group.ADMIN],
-				{ enterprise: true },
-				{
-					licenseKey: 'enterprise-license-key',
-					enterprise: true,
-					entitlements: [ENTERPRISE_ENTITLEMENT]
-				}
-			);
-
-			await expect.element(page.getByText(copy, { exact: true })).not.toBeInTheDocument();
-		});
-
-		it('can be dismissed for this device', async () => {
-			await renderLayout([Group.ADMIN]);
-
-			const dismiss = page.getByRole('button', {
-				name: 'Dismiss community signup banner',
-				exact: true
-			});
-			await expect.element(dismiss).toBeVisible();
-			// Native DOM click: Playwright actionability fails on driver.js overlays.
-			const el = await dismiss.element();
-			if (!(el instanceof HTMLElement)) {
-				throw new Error('Expected dismiss control to be an HTMLElement');
-			}
-			el.click();
-			await expect.element(page.getByText(copy, { exact: true })).not.toBeInTheDocument();
-
-			await renderLayout([Group.ADMIN]);
-			await expect.element(page.getByText(copy, { exact: true })).not.toBeInTheDocument();
-		});
-
-		it('stays dismissed when dismissed after the profile was created', async () => {
-			localStorage.setItem(
-				'@obot/dismiss-community-signup-banner',
-				JSON.stringify({ dismissedAt: '2026-08-10T00:00:00.000Z' })
-			);
-
-			await renderLayout([Group.ADMIN], {}, {}, { created: '2026-08-04T16:58:40.000Z' });
-
-			await expect.element(page.getByText(copy, { exact: true })).not.toBeInTheDocument();
-		});
-
-		it('shows again when the profile was created after the banner was dismissed', async () => {
-			localStorage.setItem(
-				'@obot/dismiss-community-signup-banner',
-				JSON.stringify({ dismissedAt: '2020-01-01T00:00:00.000Z' })
-			);
-
-			await renderLayout([Group.ADMIN], {}, {}, { created: '2026-08-04T16:58:40.000Z' });
-
-			await expect.element(page.getByText(copy, { exact: true })).toBeVisible();
 		});
 	});
 });

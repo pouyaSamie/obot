@@ -13,7 +13,6 @@ import (
 	"github.com/obot-platform/obot/pkg/api/handlers/setup"
 	"github.com/obot-platform/obot/pkg/api/handlers/wellknown"
 	"github.com/obot-platform/obot/pkg/services"
-	"github.com/obot-platform/obot/pkg/upgrade"
 	"github.com/obot-platform/obot/ui"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"k8s.io/component-base/metrics/legacyregistry"
@@ -38,8 +37,6 @@ func NewRouter(ctx context.Context, services *services.Services) (*Router, error
 
 	version, err := handlers.NewVersionHandler(ctx, handlers.VersionHandlerOptions{
 		GatewayClient:           services.GatewayClient,
-		StorageClient:           services.StorageClient,
-		LicenseProvider:         services.LicenseProvider,
 		PostgresDSN:             services.PostgresDSN,
 		Engine:                  services.MCPRuntimeBackend,
 		MCPNetworkPolicyEnabled: services.MCPNetworkPolicyEnabled,
@@ -128,7 +125,6 @@ func NewRouter(ctx context.Context, services *services.Services) (*Router, error
 	oauthClients := handlers.NewOAuthClientsHandler(services.OAuthServerConfig, services.ServerURL)
 	publishedArtifacts := handlers.NewPublishedArtifactHandler(services.ArtifactBlobStore, services.ArtifactBlobBucket)
 	imagePullSecretsHandler := handlers.NewImagePullSecretHandler(services.MCPRuntimeBackend, services.MCPImagePullSecrets, services.MCPServerNamespace, services.ServiceNamespace, services.ServiceAccountName, services.LocalK8sClient, services.ServiceAccountIssuerURL, services.ServiceAccountIssuerError)
-	licenseHandler := handlers.NewLicenseHandler(services.LicenseProvider, upgrade.NewCommunityLicenseIssuer(services.GatewayClient, upgrade.ServerBaseURL(), http.DefaultClient))
 	tunnelHandler := handlers.NewTunnelHandler(services.TunnelManager)
 	mcpTunnelHandler := handlers.NewMCPTunnelHandler(services.TunnelManager)
 	k8sSettingsHandler := handlers.NewK8sSettingsHandler(
@@ -147,13 +143,6 @@ func NewRouter(ctx context.Context, services *services.Services) (*Router, error
 
 	// Version
 	mux.HandleFunc("GET /api/version", version.GetVersion)
-
-	// License
-	mux.HandleFunc("GET /api/license", licenseHandler.Get)
-	mux.HandleFunc("PUT /api/license", licenseHandler.Update)
-	mux.HandleFunc("POST /api/license", licenseHandler.CheckLicense)
-	mux.HandleFunc("POST /api/license/community", licenseHandler.CreateCommunityLicense)
-	mux.HandleFunc("DELETE /api/license", licenseHandler.Delete)
 
 	// Tunnel management (admin/owner only).
 	// /api/tunnels gives information about the connected tunnels

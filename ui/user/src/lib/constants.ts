@@ -1,6 +1,5 @@
 export const ABORTED_THREAD_MESSAGE = 'thread was aborted, cancelling run';
 export const ABORTED_BY_USER_MESSAGE = 'aborted by user';
-
 export const UNAUTHORIZED_PATHS = new Set([
 	'/',
 	'/privacy-policy',
@@ -448,10 +447,3 @@ export const MCP_FILTERS_FIELD_IDS = {
 	runtimeSelector: 'filter-runtime-selector',
 	saveBtn: 'filter-save-btn'
 };
-
-export const COMMUNITY_ENTITLEMENT = 'OBOT_COMMUNITY';
-export const ENTERPRISE_ENTITLEMENT = 'OBOT_ENTERPRISE';
-export const MODEL_PROVIDERS_ENTITLEMENT = 'OBOT_ENTERPRISE_MODEL_PROVIDERS';
-
-export const COMMUNITY_SIGNUP_BANNER_COPY =
-	'Register your email to unlock all remaining IDPs and to receive the Obot Community Newsletter!';

@@ -53,6 +53,9 @@ func (s *Server) AddRoutes(mux *server.Server, tunnelBridge http.Handler) {
 
 	mux.HandleFunc("GET /api/token-usage", wrap(s.systemTokenUsageByUser))
 	mux.HandleFunc("GET /api/total-token-usage", wrap(s.totalSystemTokenUsage))
+	mux.HandleFunc("GET /api/usage-settings", wrap(s.usageSettings))
+	mux.HandleFunc("PUT /api/usage-settings", wrap(s.updateUsageSettings))
+	mux.HandleFunc("PUT /api/users/{user_id}/daily-total-token-limit", wrap(s.updateUserDailyTotalTokenLimit))
 
 	mux.HandleFunc("POST /api/token-request", s.tokenRequest)
 	mux.HandleFunc("GET /api/token-request/{id}", s.checkForToken)

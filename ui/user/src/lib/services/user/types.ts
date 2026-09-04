@@ -59,6 +59,7 @@ export interface AppNotification {
 // App preferences
 
 export interface AppPreferences {
+	appName: string;
 	logos: {
 		logoIcon: string;
 		logoIconError: string;
@@ -493,16 +494,6 @@ export interface K8sServerLog {
 	message: string;
 }
 
-// Licensing
-export interface LicenseEntitlementViolation {
-	type: string;
-	namespace: string;
-	name: string;
-	requiredEntitlements: string[];
-	missingEntitlements: string[];
-	message?: string;
-}
-
 // MCP catalog servers
 
 export interface MCPCatalogServer {
@@ -818,6 +809,7 @@ export interface OrgUser {
 	deletedAt?: string;
 	originalEmail?: string;
 	originalUsername?: string;
+	dailyTotalTokensLimit?: number;
 }
 export interface OrgGroup {
 	id: string;
@@ -924,15 +916,8 @@ export interface Version {
 	sessionStore?: string;
 	obot?: string;
 	authEnabled?: boolean;
-	enterprise?: boolean;
-	community?: boolean;
-	licenseEntitlements?: string[];
 	userCount?: number;
-	userLimit?: number;
 	deviceCount?: number;
-	deviceLimit?: number;
-	licenseEntitlementViolations?: LicenseEntitlementViolation[];
-	missingLicenseEntitlements?: string[];
 	upgradeAvailable?: boolean;
 	engine?: 'docker' | 'kubernetes' | 'local';
 	mcpNetworkPolicyEnabled?: boolean;

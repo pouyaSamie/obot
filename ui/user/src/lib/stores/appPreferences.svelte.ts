@@ -41,6 +41,7 @@ export const FONT_FAMILY_PRESETS: { label: string; value: string }[] = [
 
 export function compileAppPreferences(preferences?: AppPreferences): AppPreferences {
 	return {
+		appName: preferences?.appName?.trim() || 'Obot',
 		logos: {
 			logoIcon: preferences?.logos?.logoIcon ?? DEFAULT_LOGOS.icon.default,
 			logoIconError: preferences?.logos?.logoIconError ?? DEFAULT_LOGOS.icon.error,
