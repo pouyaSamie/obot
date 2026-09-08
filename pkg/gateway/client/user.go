@@ -698,7 +698,7 @@ func (c *Client) getUserAndGroupIDs(ctx context.Context, userID any, authProvide
 
 		// Filter by auth provider if specified
 		if authProviderNamespace != "" && authProviderName != "" {
-			query = query.Where("groups.auth_provider_namespace = ? AND groups.auth_provider_name = ?", authProviderNamespace, authProviderName)
+			query = query.Where("(groups.auth_provider_namespace = ? AND groups.auth_provider_name = ?) OR groups.source = ? OR groups.id LIKE ?", authProviderNamespace, authProviderName, types.GroupSourceCustom, types.CustomGroupIDPrefix+"%")
 		}
 
 		// Get the group IDs
@@ -711,6 +711,19 @@ func (c *Client) getUserAndGroupIDs(ctx context.Context, userID any, authProvide
 		return nil, nil, err
 	}
 
+	customAndSystem, err := c.ListCustomAndSystemGroupIDs(ctx, u.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	seen := make(map[string]struct{}, len(groupIDs)+len(customAndSystem))
+	for _, id := range groupIDs {
+		seen[id] = struct{}{}
+	}
+	for _, id := range customAndSystem {
+		if _, ok := seen[id]; !ok {
+			groupIDs = append(groupIDs, id)
+		}
+	}
 	if err := c.decryptUser(ctx, u); err != nil {
 		return nil, nil, err
 	}

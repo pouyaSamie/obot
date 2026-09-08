@@ -98,6 +98,8 @@ var (
 		"/api/default-model-aliases/",
 		"/api/users",
 		"GET /api/groups",
+		"/api/custom-groups",
+		"/api/custom-groups/",
 		"/api/group-role-assignments",
 		"/api/group-role-assignments/",
 		"POST /api/encrypt-all-users",

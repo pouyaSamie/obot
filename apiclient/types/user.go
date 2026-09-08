@@ -84,6 +84,7 @@ type User struct {
 	OriginalEmail          string   `json:"originalEmail,omitempty"`
 	OriginalUsername       string   `json:"originalUsername,omitempty"`
 	AuthProviderSources    []string `json:"authProviderSources,omitempty"`
+	CustomGroups           []string `json:"customGroups,omitempty"`
 	Disabled               bool     `json:"disabled,omitempty"`
 }
 

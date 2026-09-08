@@ -91,6 +91,15 @@ func (s *Server) getUsers(apiContext api.Context) error {
 		return fmt.Errorf("failed to get user group memberships: %v", err)
 	}
 
+	customGroupNames := make(map[string]string)
+	if customGroups, err := apiContext.GatewayClient.ListCustomGroups(apiContext.Context(), ""); err != nil {
+		return fmt.Errorf("failed to list custom groups: %w", err)
+	} else {
+		for _, group := range customGroups {
+			customGroupNames[group.ID] = group.Name
+		}
+	}
+
 	// Bulk compute effective roles for all users (single query)
 	effectiveRoles, err := apiContext.GatewayClient.ResolveUserEffectiveRolesBulk(apiContext.Context(), validUsers, userGroupMemberships)
 	if err != nil {
@@ -109,6 +118,11 @@ func (s *Server) getUsers(apiContext api.Context) error {
 		if identities, err := apiContext.GatewayClient.FindIdentitiesForUser(apiContext.Context(), user.ID); err == nil {
 			for _, identity := range identities {
 				converted.AuthProviderSources = append(converted.AuthProviderSources, identity.AuthProviderName)
+			}
+		}
+		for _, groupID := range userGroupMemberships[user.ID] {
+			if name, ok := customGroupNames[groupID]; ok {
+				converted.CustomGroups = append(converted.CustomGroups, name)
 			}
 		}
 		items = append(items, *converted)

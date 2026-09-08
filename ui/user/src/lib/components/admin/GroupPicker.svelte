@@ -32,6 +32,7 @@
 	let cursorStack = $state<(string | undefined)[]>([undefined]);
 	let nextCursor = $state<string | undefined>(undefined);
 	let groups = $state<OrgGroup[]>([]);
+	let customGroups = $state<OrgGroup[]>([]);
 	let degraded = $state(false);
 	let loading = $state(false);
 	let errored = $state(false);
@@ -50,13 +51,17 @@
 		loading = true;
 		errored = false;
 		try {
-			const page = await UserService.listGroups({
-				query,
-				limit: pageSize,
-				cursor: cursorStack[pageIndex],
-				signal: controller.signal
-			});
+			const [page, custom] = await Promise.all([
+				UserService.listGroups({
+					query,
+					limit: pageSize,
+					cursor: cursorStack[pageIndex],
+					signal: controller.signal
+				}),
+				UserService.listCustomGroups({ query })
+			]);
 			if (controller.signal.aborted) return;
+			customGroups = [{ id: 'system/ldap-users', name: 'All LDAP Users', source: 'system' }, ...custom];
 
 			if (page.reset) {
 				cursorStack = [undefined];
@@ -98,7 +103,7 @@
 	});
 
 	const excluded = $derived(new Set(excludeIds ?? []));
-	const visibleGroups = $derived(groups.filter((group) => !excluded.has(group.id)));
+	const visibleGroups = $derived([...customGroups, ...groups].filter((group) => !excluded.has(group.id)));
 
 	function handleSearch(value: string) {
 		query = value;

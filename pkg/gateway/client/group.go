@@ -516,7 +516,19 @@ func (c *Client) ListGroupIDsForUser(ctx context.Context, userID uint) ([]string
 	if err := c.db.WithContext(ctx).Table("group_memberships").Where("user_id = ?", userID).Pluck("group_id", &groupIDs).Error; err != nil {
 		return nil, fmt.Errorf("failed to list user group IDs: %w", err)
 	}
-
+	customAndSystem, err := c.ListCustomAndSystemGroupIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(groupIDs)+len(customAndSystem))
+	for _, id := range groupIDs {
+		seen[id] = struct{}{}
+	}
+	for _, id := range customAndSystem {
+		if _, ok := seen[id]; !ok {
+			groupIDs = append(groupIDs, id)
+		}
+	}
 	return groupIDs, nil
 }
 

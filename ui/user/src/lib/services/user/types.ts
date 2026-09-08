@@ -796,6 +796,7 @@ export interface DefaultModelAlias {
 
 export interface OrgUser {
 	authProviderSources?: string[];
+	customGroups?: string[];
 	created: string;
 	username: string;
 	email: string;
@@ -817,13 +818,19 @@ export interface OrgGroup {
 	id: string;
 	name: string;
 	iconURL?: string;
+	source?: OrgGroupSource;
+	memberCount?: number;
+}
+
+export interface CustomGroup extends OrgGroup {
+	memberUserIDs?: number[];
 }
 
 /**
  * Where a group listing came from. `cache` is Obot's own record of groups, which holds the ones seen
  * during previous sign-ins plus any resolved by ID for a policy, and is therefore partial.
  */
-export type OrgGroupSource = 'provider' | 'cache';
+export type OrgGroupSource = 'provider' | 'cache' | 'custom' | 'system';
 
 export interface OrgGroupPage {
 	items: OrgGroup[];

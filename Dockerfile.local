@@ -1,53 +1,113 @@
-# Local development image. It intentionally avoids the production provider and
-# PostgreSQL image stages so a developer can run Obot on Docker Desktop.
-# The builder digest is pinned so Docker Desktop can use its existing BuildKit
-# cache without contacting Docker Hub for a mutable tag.
+# Local/remote custom Obot build.
+#
+# This image keeps the local build path but preserves the important runtime
+# behavior of Obot's production image:
+#
+#   - embedded PostgreSQL when OBOT_SERVER_DSN is not supplied
+#   - persistent state under /data
+#   - provider environment generated into /obot-providers/.envrc.providers
+#
+# The deployment script later adds the Tajan internal CA as a derived image.
+
 ARG PROVIDERS_IMAGE=ghcr.io/obot-platform/providers:latest
+# This cached Alpine PostgreSQL image matches the musl-linked Obot binary. The
+# Dockerfile copies the required CA bundle directly, avoiding package-index
+# downloads from an unreachable Alpine registry.
+ARG POSTGRES_IMAGE=postgres:17.6-alpine3.22
 
 FROM docker.arvancloud.ir/library/golang:1.27-alpine@sha256:4c9fe60190a2a3350ddc51de80d0224b8a6698d12bdfc999fee45ea9d6c46dbc AS build
+
 RUN apk add --no-cache build-base git make nodejs npm
+
 WORKDIR /app
-# The default npm registry is unreachable from this Docker Desktop instance.
-# This mirror can be overridden at build time with --build-arg NPM_REGISTRY=.
+
+# Mirrors are used because the default registries are not reliably reachable
+# from this Docker Desktop environment.
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG GO_PROXY=https://goproxy.cn,direct
 
-# Install UI dependencies before copying UI source. A normal source edit now
-# reuses this layer instead of resolving all ~700 packages again.
+# Install UI dependencies before copying the rest of the UI source so normal
+# source edits can reuse this cache layer.
 COPY ui/user/package.json ui/user/pnpm-lock.yaml ui/user/pnpm-workspace.yaml /app/ui/user/
+
 RUN --mount=type=cache,id=obot-npm,target=/root/.npm \
     --mount=type=cache,id=obot-pnpm,target=/root/.local/share/pnpm/store \
     npm install --global pnpm@11.7.0 --registry=$NPM_REGISTRY && \
     pnpm config set registry $NPM_REGISTRY && \
-    cd ui/user && pnpm install --frozen-lockfile
+    cd ui/user && \
+    pnpm install --frozen-lockfile
 
-# Download Go modules before copying source for the same reason. The Go build
-# cache below still recompiles only packages affected by a source change.
+# Cache Go modules separately from the source tree.
 COPY go.mod go.sum ./
 COPY apiclient/go.mod apiclient/go.sum ./apiclient/
 COPY logger/go.mod ./logger/
+
 RUN --mount=type=cache,id=obot-go-mod,target=/go/pkg/mod \
     GOSUMDB=off GOPROXY=$GO_PROXY go mod download
 
 COPY . .
+
 RUN cd ui/user && pnpm run build
+
 RUN --mount=type=cache,id=obot-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=obot-go-build,target=/root/.cache/go-build \
     GOSUMDB=off GOPROXY=$GO_PROXY make build
 
+
+# Provider bundle stage.
 FROM ${PROVIDERS_IMAGE} AS providers
 
-FROM docker.arvancloud.ir/library/alpine:3.20
-RUN apk add --no-cache ca-certificates
-WORKDIR /app
+
+# Runtime includes PostgreSQL because run.sh starts an embedded database when
+# OBOT_SERVER_DSN is not configured.
+FROM ${POSTGRES_IMAGE}
+
+# The PostgreSQL runtime image does not include a CA bundle. Copy the one
+# already present in the cached build stage so Go clients can validate HTTPS.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Obot binary and UI.
 COPY --from=build /app/bin/obot /usr/local/bin/obot
 COPY --from=build /app/ui/user/build /app/ui/user/build
-# The provider manifests and executables are distributed in the provider
-# bundle. Without this directory the server has no providers to register.
+
+# Provider manifests, executables, and their .envrc.* files.
 COPY --from=providers /obot-providers /obot-providers
+
+# CRITICAL:
+# Generate /obot-providers/.envrc.providers exactly like the production
+# Dockerfile does. run.sh requires this file at startup.
+COPY --chmod=0755 tools/combine-envrc.sh /usr/local/bin/combine-envrc.sh
+
+RUN sed -i 's/\r$//' /usr/local/bin/combine-envrc.sh && \
+    bash /usr/local/bin/combine-envrc.sh && \
+    test -s /obot-providers/.envrc.providers && \
+    grep -q '^export OBOT_SERVER_PROVIDER_REGISTRIES=' /obot-providers/.envrc.providers && \
+    rm -f /usr/local/bin/combine-envrc.sh
+
+# Startup wrapper.
+COPY --chmod=0755 run.sh /usr/local/bin/run.sh
+
+# Persistent embedded PostgreSQL / Obot state.
+ENV POSTGRES_USER=obot
+ENV POSTGRES_PASSWORD=obot
+ENV POSTGRES_DB=obot
+ENV PGDATA=/data/postgresql
+
+ENV HOME=/data
+ENV XDG_CACHE_HOME=/data/cache
+ENV TERM=vt100
+
+# Obot runtime defaults.
 ENV OBOT_DEV_MODE=false
 ENV OBOT_SERVER_ENABLE_AUTHENTICATION=true
 ENV OBOT_SERVER_ENABLE_REGISTRY_AUTH=true
-ENV OBOT_SERVER_PROVIDER_REGISTRIES=/obot-providers/providers
+
+# Keep /app because this custom build places the separately-built UI there.
+# Runtime state still lives under /data via HOME/PGDATA/XDG_CACHE_HOME.
+WORKDIR /app
+
+VOLUME /data
+
 EXPOSE 8080
-ENTRYPOINT ["obot", "server"]
+
+ENTRYPOINT ["run.sh"]

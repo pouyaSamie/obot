@@ -70,6 +70,11 @@ func (u UserDecorator) AuthenticateRequest(req *http.Request) (*authenticator.Re
 		}
 
 		authGroupIDs = identity.GetAuthProviderGroupIDs()
+		customAndSystem, err := u.client.ListCustomAndSystemGroupIDs(req.Context(), gatewayUser.ID)
+		if err != nil {
+			return nil, false, err
+		}
+		authGroupIDs = append(authGroupIDs, customAndSystem...)
 	} else {
 		return nil, false, nil
 	}

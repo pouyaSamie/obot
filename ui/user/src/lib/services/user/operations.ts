@@ -50,6 +50,7 @@ import {
 	type ModelProviderList,
 	type OrgGroup,
 	type OrgGroupPage,
+	type CustomGroup,
 	type OrgUser,
 	type Profile,
 	type McpServerOrInstanceAuditLogStatsFilters,
@@ -659,6 +660,37 @@ export async function listGroups(opts?: {
 	};
 }
 
+export async function listCustomGroups(opts?: { fetch?: Fetcher; query?: string }): Promise<CustomGroup[]> {
+	const queryString = buildQueryString({ name: opts?.query });
+	const response = (await doGet(
+		`/custom-groups${queryString ? `?${queryString}` : ''}`,
+		opts
+	)) as ItemsResponse<CustomGroup>;
+	return response.items ?? [];
+}
+
+export async function createCustomGroup(name: string): Promise<CustomGroup> {
+	return (await doPost('/custom-groups', { name })) as CustomGroup;
+}
+
+export async function getCustomGroup(id: string, opts?: { fetch?: Fetcher }): Promise<CustomGroup> {
+	return (await doGet(`/custom-groups/${encodeURIComponent(id)}`, opts)) as CustomGroup;
+}
+
+export async function updateCustomGroup(id: string, name: string): Promise<CustomGroup> {
+	return (await doPatch(`/custom-groups/${encodeURIComponent(id)}`, { name })) as CustomGroup;
+}
+
+export async function deleteCustomGroup(id: string): Promise<void> {
+	await doDelete(`/custom-groups/${encodeURIComponent(id)}`);
+}
+
+export async function setCustomGroupMembers(id: string, userIDs: string[]): Promise<CustomGroup> {
+	return (await doPut(`/custom-groups/${encodeURIComponent(id)}/members`, {
+		userIDs: userIDs.map((userID) => Number(userID))
+	})) as CustomGroup;
+}
+
 const RESOLVE_GROUPS_CHUNK_SIZE = 100;
 const RESOLVE_GROUPS_MAX_CONCURRENCY = 4;
 
@@ -674,33 +706,41 @@ export async function resolveGroups(
 ): Promise<OrgGroup[]> {
 	if (ids.length === 0) return [];
 
-	const batches: string[][] = [];
-	for (let i = 0; i < ids.length; i += RESOLVE_GROUPS_CHUNK_SIZE) {
-		batches.push(ids.slice(i, i + RESOLVE_GROUPS_CHUNK_SIZE));
+	const byID = new Map<string, OrgGroup>();
+	const customIDs = ids.filter((id) => id.startsWith('custom/'));
+	const providerIDs = ids.filter((id) => !id.startsWith('custom/') && id !== 'system/ldap-users');
+
+	for (const id of customIDs) {
+		try {
+			byID.set(id, await getCustomGroup(id, opts));
+		} catch {
+			byID.set(id, { id, name: id, source: 'custom' });
+		}
+	}
+	if (ids.includes('system/ldap-users')) {
+		byID.set('system/ldap-users', {
+			id: 'system/ldap-users',
+			name: 'All LDAP Users',
+			source: 'system'
+		});
 	}
 
-	// Indexed rather than appended, so the result stays in the order the IDs were asked for however
-	// the requests interleave.
+	const batches: string[][] = [];
+	for (let i = 0; i < providerIDs.length; i += RESOLVE_GROUPS_CHUNK_SIZE) {
+		batches.push(providerIDs.slice(i, i + RESOLVE_GROUPS_CHUNK_SIZE));
+	}
 	const pages: OrgGroupPage[] = new Array(batches.length);
 	let next = 0;
-
 	async function worker() {
 		while (next < batches.length) {
 			const index = next++;
-			pages[index] = (await doGet(
-				`/groups?${buildQueryString({ ids: batches[index] })}`,
-				opts
-			)) as OrgGroupPage;
+			pages[index] = (await doGet(`/groups?${buildQueryString({ ids: batches[index] })}`, opts)) as OrgGroupPage;
 		}
 	}
-
-	await Promise.all(
-		Array.from({ length: Math.min(RESOLVE_GROUPS_MAX_CONCURRENCY, batches.length) }, () => worker())
-	);
-
-	return pages.flatMap((page) => page?.items ?? []);
+	await Promise.all(Array.from({ length: Math.min(RESOLVE_GROUPS_MAX_CONCURRENCY, batches.length) }, () => worker()));
+	for (const group of pages.flatMap((page) => page?.items ?? [])) byID.set(group.id, group);
+	return ids.map((id) => byID.get(id) ?? { id, name: id });
 }
-
 export async function listUsers(opts?: {
 	fetch?: Fetcher;
 	signal?: AbortSignal;

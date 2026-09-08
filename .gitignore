@@ -70,3 +70,4 @@ thoughts
 
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
+*.ps1

@@ -504,9 +504,16 @@
 								disabled: !version.current.authEnabled
 							},
 							{
+								id: 'custom-groups',
+								href: '/admin/custom-groups',
+								label: 'Custom Groups',
+								collapsible: false,
+								disabled: !version.current.authEnabled
+							},
+							{
 								id: 'groups',
 								href: '/admin/groups',
-								label: 'Groups',
+								label: 'Group Role Assignments',
 								collapsible: false,
 								disabled: !version.current.authEnabled
 							},

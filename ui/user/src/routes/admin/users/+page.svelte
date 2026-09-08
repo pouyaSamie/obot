@@ -336,10 +336,13 @@
 						{:else if property === 'name'}
 							<div class="flex flex-col gap-1">
 								<span>{d.name}</span>
-								{#if d.authProviderSources?.length}
+								{#if d.authProviderSources?.length || d.customGroups?.length}
 									<div class="flex flex-wrap gap-1">
-										{#each d.authProviderSources as source}
+										{#each d.authProviderSources ?? [] as source}
 											<span class="badge badge-sm">{source.replace('-auth-provider', '')}</span>
+										{/each}
+										{#each d.customGroups ?? [] as group}
+											<span class="badge badge-primary badge-sm">{group}</span>
 										{/each}
 									</div>
 								{/if}
